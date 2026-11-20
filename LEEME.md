@@ -26,17 +26,6 @@ dotnet run --project src/Oficina.UI
 
 La primera vez, si la base no existe, la aplicación la crea con `sql/OficinaRegistros.sql` (va incrustado en el programa), y si no tiene cuentas carga sola los datos de ejemplo. Si no puede conectarse, ofrece abrir en **modo prueba** (datos en memoria que se pierden al cerrar). También se puede forzar con `--memoria`.
 
-## Cuentas de ejemplo
-
-| Cuenta | Contraseña | Puede |
-|---|---|---|
-| `admin` | `admin2026` | Todo, en todos los sectores, y la administración. |
-| `entrada`, `seguimiento`, `sala`, `sentencias`, `apremio` | `oficina2026` | Todo en su sector; ver los otros sectores de actas (para el recorrido del acta). |
-| `lotes` | `oficina2026` | Todo en Lotes; ver Entrada y Salida. |
-| `reclamos` | `oficina2026` | Todo en Reclamos Vía Pública. |
-| `estadisticas` | `oficina2026` | Ver todos los sectores. |
-
-Conviene cambiar estas contraseñas desde **Configuración → Cuentas** antes de usarlo en serio.
 
 ## Qué se puede probar
 

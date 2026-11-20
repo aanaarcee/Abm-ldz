@@ -208,7 +208,8 @@ public static class DatosDeEjemplo
             var r = new Reclamo
             {
                 NroCaso = $"RVP-{fecha.Year}-{i:000}", Fecha = fecha,
-                Origen = azar.Next(2) == 0 ? OrigenReclamo.Transito : OrigenReclamo.GestionDeReclamos, Estado = estado,
+                Origen = azar.Next(2) == 0 ? OrigenReclamo.Transito : OrigenReclamo.GestionDeReclamos,
+                Categoria = (CategoriaReclamo)azar.Next(1, 4), Estado = estado,
                 Ubicacion = $"{Al(calles)} {azar.Next(100, 2400)}", Entrecalles = $"entre {Al(calles)} y {Al(calles)}",
                 Delegacion = Al(delegaciones), Vehiculo = Al(vehiculos), Denunciante = Al(denunciantes),
                 Verificado = verificado, FechaVerificacion = verificado ? fecha.AddDays(azar.Next(1, 3)) : null,

@@ -3,7 +3,7 @@ using Oficina.Entidades;
 
 namespace Oficina.Negocio;
 
-//Una fila de la tabla de permisos: un sector con lo que el rol puede hacer ahí
+//una fila de la tabla de permisos: un sector con lo que el rol puede hacer ahí
 public class FilaPermiso
 {
     public Sector Sector { get; set; }
@@ -15,7 +15,7 @@ public class FilaPermiso
     public Accion Acciones => (Leer ? Accion.Leer : 0) | (Cargar ? Accion.Cargar : 0) | (Modificar ? Accion.Modificar : 0) | (Eliminar ? Accion.Eliminar : 0);
 }
 
-// Roles, permisos, cuentas, sectores y listas. Solo para el Administrador
+// roles, permisos, cuentas, sectores y listas. Solo para el Administrador
 public class ServicioAdministracion : ServicioBase
 {
     private readonly IDatosSeguridad _seguridad;
@@ -54,7 +54,7 @@ public class ServicioAdministracion : ServicioBase
         Largo(r.Nombre, 60, "El nombre");
         if (r.IdRol == Sesion.Rol.IdRol && !r.EsAdministrador)
             throw new ExcepcionNegocio("No puede quitarle el permiso de Administrador a su propio rol.");
-        // El Administrador es una cuenta aparte: la cuenta general de un sector nunca puede serlo
+        // el administrador es una cuenta aparte: la cuenta general de un sector nunca puede serlo
         if (r.EsAdministrador && r.IdSectorPropio != null)
             throw new ExcepcionNegocio("El rol de un sector no puede ser Administrador. El Administrador es una cuenta aparte.");
         bool alta = r.IdRol == 0;
@@ -76,7 +76,7 @@ public class ServicioAdministracion : ServicioBase
         }).ToList();
     }
 
-    // Guarda la tabla de permisos. Cargar, modificar o eliminar implican poder leer
+    // guarda la tabla de permisos. Cargar, modificar o eliminar implican poder leer
     public void GuardarPermisos(int idRol, IEnumerable<FilaPermiso> filas)
     {
         var rol = _seguridad.ObtenerRol(idRol) ?? throw new ExcepcionNegocio("El rol no existe.");

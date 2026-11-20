@@ -9,3 +9,4 @@ TestResults/
 
 # Configuración local (cada uno con su cadena de conexión)
 *.local.json
+conexion.local.txt

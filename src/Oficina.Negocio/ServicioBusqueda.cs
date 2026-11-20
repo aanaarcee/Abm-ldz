@@ -11,14 +11,14 @@ public class TarjetaSector
     public string Detalle { get; set; }
 }
 
-// Búsqueda general (en todos los sectores que la cuenta puede ver) y datos de la pantalla de inicio.
+// busqueda general (en todos los sectores que la cuenta puede ver) y datos de la pantalla de inicio.
 public class ServicioBusqueda : ServicioBase
 {
     public const int MinimoCaracteres = 2;
 
     public ServicioBusqueda(Sesion sesion, IDatosRegistros datos) : base(sesion, datos) { }
 
-    // Busca en todo lo que la cuenta puede leer. Con idSector, solo dentro de ese sector 
+    // busca en todo lo que la cuenta puede leer. con idSector, solo dentro de ese sector 
     public List<ResultadoBusqueda> Buscar(string texto, int? idSector = null)
     {
         texto = texto?.Trim() ?? "";
@@ -54,7 +54,7 @@ public class ServicioBusqueda : ServicioBase
                     t.Detalle = $"lotes · {lotes.Sum(l => l.Total)} actas";
                     break;
                 default:
-                    // Solo suma los sectores que la cuenta ve
+                    // solo suma los sectores que la cuenta ve
                     t.Cantidad = Sesion.IdsVisibles.Sum(id => porSector.GetValueOrDefault(id));
                     t.Detalle = "movimientos en total";
                     break;

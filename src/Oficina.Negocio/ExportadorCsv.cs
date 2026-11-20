@@ -36,11 +36,11 @@ public class ExportadorCsv : ServicioBase
         {
             TipoSector.Actas => Escribir(ruta, _registros.Movimientos(idSector, filtro),
                 ("Fecha", m => m.Fecha), ("N° de causa", m => m.NroCausa), ("Repartición", m => m.Reparticion), ("Año", m => m.Anio),
-                ("N° de acta", m => m.NroActa), ("Persona", m => m.Persona), ("Documento", m => m.Documento),
+                ("N° de acta", m => m.NroActa), ("N° de apremio", m => m.NroApremio), ("Persona", m => m.Persona), ("Documento", m => m.Documento),
                 ("Movimiento", m => m.Detalle), ("Remito", m => m.Remito), ("Suma reclamada", m => m.SumaReclamada), ("Gastos administrativos", m => m.GastosAdministrativos),
                 ("Observaciones", m => m.Observaciones), ("Último cambio", m => m.UltimaModificacion)),
             TipoSector.Reclamos => Escribir(ruta, _registros.Reclamos(idSector, filtro),
-                ("N° de caso", r => r.NroCaso), ("Fecha de ingreso", r => r.Fecha), ("Origen", r => r.TextoOrigen), ("Estado", r => r.TextoEstado),
+                ("N° de caso", r => r.NroCaso), ("Fecha de ingreso", r => r.Fecha), ("Origen", r => r.TextoOrigen), ("Categoría", r => r.TextoCategoria), ("Estado", r => r.TextoEstado),
                 ("Dirección", r => r.Ubicacion), ("Entrecalles", r => r.Entrecalles), ("Delegación", r => r.Delegacion), ("Vehículo", r => r.Vehiculo),
                 ("Denunciante", r => r.Denunciante), ("Verificado", r => r.Verificado), ("Primera verificación", r => r.FechaVerificacion),
                 ("Inspector", r => r.VerificadoPor), ("Acta de infracción", r => r.NroActaInfraccion), ("Cédula de notificación", r => r.FechaNotificacion),

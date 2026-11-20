@@ -46,6 +46,7 @@ internal class VistaSector : UserControl, IRefrescable
         if (puedeModificar) botones.Controls.Add(Estilo.Boton("Modificar", (_, _) => Modificar()));
         if (puedeEliminar) botones.Controls.Add(Estilo.Boton("Eliminar", (_, _) => Eliminar()));
         if (sector.Tipo == TipoSector.Actas) botones.Controls.Add(Estilo.Boton("Ver acta", (_, _) => VerActa()));
+        if (sector.Tipo == TipoSector.Lotes) botones.Controls.Add(Estilo.Boton("Actas del lote", (_, _) => ActasDelLote()));
         if (sector.Tipo != TipoSector.Consulta) botones.Controls.Add(Estilo.Boton("Exportar CSV", (_, _) => Exportar()));
         if (puedeCargar) botones.Controls.Add(Estilo.Boton("Importar", (_, _) => Importar()));
         if (puedeCargar) botones.Controls.Add(Estilo.Boton("Plantilla", (_, _) => GuardarPlantilla()));
@@ -101,6 +102,8 @@ internal class VistaSector : UserControl, IRefrescable
                 g.Columna(nameof(Movimiento.Reparticion), "Repartición", 130);
                 g.Columna(nameof(Movimiento.Anio), "Año", 50);
                 g.Columna(nameof(Movimiento.NroActa), "N° acta", 70);
+                // Apremio trabaja con su propio número (P29): en su planilla se ve al lado del N° de acta
+                if (_sector.Clave == ServicioRegistros.ClaveApremio) g.Columna(nameof(Movimiento.NroApremio), "N° apremio", 90);
                 g.Columna(nameof(Movimiento.Persona), "Persona");
                 g.Columna(nameof(Movimiento.Documento), "Documento", 95);
                 g.Columna(nameof(Movimiento.Detalle), "Movimiento");
@@ -110,6 +113,7 @@ internal class VistaSector : UserControl, IRefrescable
             case TipoSector.Reclamos:
                 g.Columna(nameof(Reclamo.NroCaso), "N° de caso", 110);
                 g.Columna(nameof(Reclamo.Fecha), "Ingreso", 90, "dd/MM/yyyy");
+                g.Columna(nameof(Reclamo.TextoCategoria), "Categoría", 100);
                 g.Columna(nameof(Reclamo.Ubicacion), "Dirección");
                 g.Columna(nameof(Reclamo.Delegacion), "Delegación", 120);
                 g.Columna(nameof(Reclamo.Vehiculo), "Vehículo");
@@ -238,6 +242,14 @@ internal class VistaSector : UserControl, IRefrescable
     private void VerActa()
     {
         if (Seleccionado() is Movimiento m) _nav.AbrirActa(m.IdActa);
+    }
+
+    // Las actas terminadas que se archivaron en el lote elegido (P12, P13)
+    private void ActasDelLote()
+    {
+        if (Seleccionado() is not Lote l) return;
+        using var f = new FormActasLote(_nav, _servicio, _sector, l);
+        f.ShowDialog(this);
     }
 
     private void Exportar()

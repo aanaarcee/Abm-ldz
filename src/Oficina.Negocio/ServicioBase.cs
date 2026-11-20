@@ -3,7 +3,7 @@ using Oficina.Entidades;
 
 namespace Oficina.Negocio;
 
-/// Lo común a los servicios: la sesión, el historial y la traducción de errores de datos
+/// lo común a los servicios: la sesión, el historial y la traducción de errores de datos
 public abstract class ServicioBase
 {
     protected Sesion Sesion { get; }
@@ -22,7 +22,7 @@ public abstract class ServicioBase
             IdUsuario = Sesion.IdUsuario, Fecha = DateTime.Now
         });
 
-    /// Ejecuta una escritura y convierte los errores de clave repetida en ExcepcionNegocio 
+    /// ejecuta una escritura y convierte los errores de clave repetida en ExcepcionNegocio 
     protected static void Guardar(Action escritura)
     {
         try { escritura(); }
@@ -42,7 +42,7 @@ public abstract class ServicioBase
     }
 }
 
-// Arma el texto de "qué cambió" para el historial
+// arma el texto de "qué cambió" para el historial
 internal class Cambios
 {
     private readonly List<string> _lista = new();

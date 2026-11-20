@@ -1,66 +1,58 @@
 # ABM LDZ · registros de la oficina
 
-Aplicación de escritorio en C# (Windows Forms, POO y N capas) con base de datos SQL Server. Reemplaza las planillas de Google Sheets de cada sector por una base única, con roles por sector y una búsqueda general en todos los registros, o dentro de uno solo.
+Aplicación de escritorio en C# (Windows Forms, POO y N capas) con base de datos **PostgreSQL**. Reemplaza las planillas de Google Sheets de cada sector por una base única, con roles por sector y una búsqueda general en todos los registros, o dentro de uno solo.
 
-> En desarrollo. La solución todavía se está armando: ver el estado más abajo.
+> Prototipo funcional. Hoy corre contra una base de prueba; la oficina lo va a instalar en su propio servidor.
 
 ## Estructura
 
 | Carpeta | Capa | Qué tiene |
 | --- | --- | --- |
 | `src/Oficina.Entidades` | Entidades | Clases del modelo: Sector, Rol, Usuario, Permiso, Acta, ActaVersion, Movimiento, Lote, Reclamo, Historial. |
-| `src/Oficina.Datos` | Datos | Acceso a SQL Server y una versión en memoria para probar sin base. |
-| `src/Oficina.Negocio` | Negocio | Reglas: inicio de sesión, permisos por sector, validaciones, historial, búsqueda. |
-| `src/Oficina.UI` | Interfaz | Formularios de Windows Forms. |
-| `sql/OficinaRegistros.sql` | Base | Crea la base `OficinaRegistros`, sus tablas y el procedimiento de búsqueda. |
+| `src/Oficina.Datos` | Datos | Acceso a PostgreSQL (`Postgres/`, Npgsql) y una versión en memoria para probar sin base (`Memoria/`). |
+| `src/Oficina.Negocio` | Negocio | Reglas: inicio de sesión, permisos por sector, validaciones, historial, búsqueda, importación y exportación. |
+| `src/Oficina.UI` | Interfaz | Formularios de Windows Forms. El programa se llama `RegistrosOficina.exe`. |
+| `sql/OficinaRegistros.sql` | Base | Estructura de partida: tablas y funciones de búsqueda. |
+| `sql/Migraciones/` | Base | Cambios de estructura posteriores, numerados. Se aplican solos al abrir la aplicación. Ver su [LEEME](sql/Migraciones/LEEME.md). |
 
 ## Lo confirmado por la oficina
 
 - Un acta se identifica por **N° de causa + repartición + año**. El N° de acta se puede repetir.
 - Existe el **acta original y el acta modificada**: cada cambio guarda una versión.
-- Las actas se guardan **al menos 10 años**: no se borra nada, solo se marca como eliminado.
-- **Reclamos** son avisos de autos abandonados en la vía pública. «Verificado» es cuando alguien va a ver el auto.
+- Un acta **termina cuando se archiva en un lote**, por sentencia definitiva o porque se pagó, y queda ahí entre 5 y 10 años. Archivada, no admite cambios.
+- **Apremio** le da a cada acta su propio número (N° de apremio).
+- **Un remito es único por acta.**
+- **Reclamos** son avisos de autos abandonados, con categoría Tránsito, Demanda o Municipales. «Verificado» es cuando alguien va a ver el auto: se anota quién y cuándo.
+- **Monto 1 y monto 2** son la suma reclamada y los gastos administrativos.
 - Quieren seguir usando **Drive como respaldo**: la app exporta a CSV.
-
-Sigue sin definir: la lista de movimientos de un acta, qué son monto 1 y monto 2, y si Sala Auditoría y Sentencias trabajan sobre la misma acta.
 
 ## Cómo abrirlo en Visual Studio
 
-Hace falta **Visual Studio 2026** (o una versión que traiga el SDK de **.NET 10**) con la carga de trabajo «Desarrollo de escritorio de .NET», y un **SQL Server** en la misma PC (sirve SQL Server Express o Developer).
+Hace falta **Visual Studio 2026** (o una versión que traiga el SDK de **.NET 10**) con la carga de trabajo «Desarrollo de escritorio de .NET», y acceso a un servidor **PostgreSQL** (versión 15 o más nueva).
 
-1. Clonar el repositorio: en Visual Studio, *Clonar un repositorio* con `https://github.com/aanaarcee/abm_ldz.git`, o por consola:
+1. Clonar el repositorio y abrir `Oficina.sln`. El proyecto de inicio es `Oficina.UI`.
+2. Crear `src/Oficina.UI/conexion.local.txt` con la cadena de conexión (una sola línea):
 
-   ```bash
-   git clone https://github.com/aanaarcee/abm_ldz.git
+   ```
+   Host=servidor;Port=5432;Database=oficinaregistros;Username=usuario;Password=clave
    ```
 
-2. Abrir `Oficina.sln`. El proyecto de inicio es `Oficina.UI`. En la carpeta «Base y documentos» del Explorador de soluciones están el script de la base, este README y el LEEME.
+   Ese archivo **no se sube a git** (tiene la contraseña) y se copia solo al lado del programa. Si no existe, se usa `conexion.txt`, que apunta a un PostgreSQL local sin contraseña.
 3. Apretar **F5**.
-
-La primera vez, la aplicación:
-
-- se conecta al SQL Server local (`Server=.` con la cuenta de Windows);
-- si la base `OficinaRegistros` no existe, la crea sola con el script `sql/OficinaRegistros.sql`, que va incrustado en el programa;
-- si la base no tiene cuentas, carga los datos de ejemplo y avisa las cuentas para entrar: `admin` / `admin2026`, y una por sector (`entrada`, `seguimiento`, `sala`, `sentencias`, `apremio`, `lotes`, `reclamos`, `estadisticas`) / `oficina2026`.
-
-Si SQL Server está en otro lado (por ejemplo `.\SQLEXPRESS`), se cambia la cadena en `src/Oficina.UI/conexion.txt`, que se copia al lado del programa. Si no puede conectarse, ofrece seguir en **modo prueba**, con los datos en memoria (se pierden al cerrar).
-
-Detalles de uso, cuentas y qué probar: ver [LEEME.md](LEEME.md).
 
 ## Base de datos
 
-La aplicación crea la base sola. Si se prefiere crearla a mano, el script `sql/OficinaRegistros.sql` se puede ejecutar desde SQL Server Management Studio o con:
+**Base nueva:** abrir la aplicación una vez con `--crear-base` (en Visual Studio: propiedades de `Oficina.UI` → Depurar → Argumentos de la línea de comandos). Crea la base `oficinaregistros`, sus tablas, le aplica las migraciones y, si está vacía, carga datos de ejemplo con cuentas de prueba (ver [LEEME.md](LEEME.md)). Esas contraseñas hay que cambiarlas antes de cargar datos reales.
 
-```
-sqlcmd -S . -E -C -i sql/OficinaRegistros.sql
-```
+**Base existente:** al abrir la aplicación se aplican solas las migraciones pendientes. Sin `--crear-base` la aplicación nunca crea una base ni carga datos de ejemplo.
 
-Si ya tenías la base de una versión anterior, no hace falta borrarla: al abrir la aplicación se corren solas las migraciones de `sql/Migraciones/` (cada paso revisa si ya se hizo) y se actualiza el procedimiento de búsqueda. Para un cambio nuevo en la estructura: se cambia `OficinaRegistros.sql` (para las bases nuevas) y se agrega una migración numerada (`002_…sql`) que lleve las bases existentes al mismo lugar.
+El usuario de la cadena de conexión necesita permiso para crear tablas solo cuando hay migraciones nuevas para aplicar.
+
+Si no puede conectarse, ofrece abrir en **modo prueba**, con datos en memoria que se pierden al cerrar. También se puede forzar con `--memoria`.
 
 ## Estado
 
-- [x] Script de la base de datos
-- [x] Entidades
-- [x] Datos (SQL Server y en memoria), Negocio e Interfaz
-- [x] Solución que se abre y corre con F5 al clonar (crea la base y carga datos de ejemplo)
-- [ ] Lista definitiva de movimientos, nombres de monto 1 y monto 2, y si Sala Auditoría y Sentencias son la misma acta
+- [x] Base de datos (PostgreSQL) con migraciones
+- [x] Entidades, Datos, Negocio e Interfaz
+- [x] Respuestas de la entrevista: archivo en lotes, N° de apremio, categoría de reclamo, un remito por acta
+- [ ] Guía de instalación para el servidor de la oficina (backups, VPN, usuario de base con permisos limitados)

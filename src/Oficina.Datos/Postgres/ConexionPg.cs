@@ -4,7 +4,7 @@ using Npgsql;
 
 namespace Oficina.Datos.Postgres;
 
-// datos para la conexion con sql (la idea es poder probar de que forma podrian conectarse de forma remota a la base de datos. podriamos probar subiendola a un servidor)
+// base común de las clases de datos: abre la conexión con PostgreSQL, ejecuta comandos y traduce los errores de la base
 public abstract class ConexionPg
 {
     private readonly string _cadena;
@@ -47,8 +47,7 @@ public abstract class ConexionPg
         return Traducir(() => cmd.ExecuteNonQuery());
     }
 
-    // Da de alta y devuelve el Id nuevo (el SQL tiene que terminar en el INSERT).
-    // Todas las tablas tienen su clave con el nombre Id + tabla (Acta -> IdActa), así que alcanza con RETURNING.
+    // da de alta y devuelve el Id nuevo (el SQL tiene que terminar en el INSERT).
     protected int Insertar(string sqlInsert, params NpgsqlParameter[] parametros)
     {
         string tabla = Regex.Match(sqlInsert, @"INSERT\s+INTO\s+(\w+)", RegexOptions.IgnoreCase).Groups[1].Value;
@@ -68,10 +67,11 @@ public abstract class ConexionPg
         try { return accion(); }
         catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
         {
-            // PostgreSQL guarda los nombres de las restricciones en minúscula
+            // postgreSQL guarda los nombres de las restricciones en minúscula
             string m = ex.ConstraintName ?? ex.Message;
             bool Es(string nombre) => m.Contains(nombre, StringComparison.OrdinalIgnoreCase);
             string texto = Es("UQ_Acta_Clave") ? "Ya existe un acta con ese N° de causa, repartición y año."
+                : Es("UQ_Acta_NroApremio") ? "Ya existe un acta con ese N° de apremio."
                 : Es("UQ_Reclamo") ? "Ya existe un reclamo con ese N° de caso."
                 : Es("UQ_Lote") ? "Ya existe un lote con ese número."
                 : Es("UQ_Usuario") ? "Ya existe una cuenta con ese nombre."
@@ -81,6 +81,25 @@ public abstract class ConexionPg
                 : Es("UQ_Reparticion") ? "Ya existe una repartición con ese número o ese nombre."
                 : Es("UQ_Juzgado") ? "Ya existe un juzgado con ese nombre."
                 : "Ya existe un registro con esos datos.";
+            throw new InvalidOperationException(texto, ex);
+        }
+        // un remito pertenece a una sola acta (EX_Movimiento_RemitoUnaActa)
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.ExclusionViolation)
+        {
+            throw new InvalidOperationException("Ese remito ya está anotado en otra acta. Un remito pertenece a una sola acta.", ex);
+        }
+        // reglas de la base que la aplicación también valida antes: si se llega acá, se avisa igual con un texto claro
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.CheckViolation)
+        {
+            string m = ex.ConstraintName ?? ex.Message;
+            bool Es(string nombre) => m.Contains(nombre, StringComparison.OrdinalIgnoreCase);
+            string texto = Es("CK_Persona_Documento") ? "El documento va solo con números: DNI de 7 u 8, CUIT de 11."
+                : Es("CK_Acta_Archivo") ? "Para archivar el acta hacen falta el lote, el motivo y la fecha."
+                : Es("CK_Acta_MotivoArchivo") ? "El motivo de archivo es Sentencia definitiva o Pagada."
+                : Es("Montos") ? "Los montos no pueden ser negativos."
+                : Es("CK_Reclamo_Verificacion") ? "Un reclamo verificado necesita la fecha de verificación y el inspector."
+                : Es("CK_Reclamo_Categoria") ? "La categoría del reclamo no es válida."
+                : "Los datos no cumplen una regla de la base: " + ex.MessageText;
             throw new InvalidOperationException(texto, ex);
         }
     }

@@ -1,13 +1,12 @@
 using Oficina.Datos;
 using Oficina.Datos.Memoria;
 using Oficina.Datos.Postgres;
-using Oficina.Datos.SqlServer;
 
 namespace Oficina.Negocio;
 
 
 // la capa negocio se encarga de coordinar la interfaz con la capa de datos, se podria llamar capa logica, pero no se es raro xd
-// La interfaz solo habla con esta clase y con los servicios, nunca con la capa de datos.
+// la interfaz solo habla con esta clase y con los servicios, nunca con la capa de datos.
 
 public class Aplicacion
 {
@@ -29,16 +28,9 @@ public class Aplicacion
         _crearBase = crearBase;
     }
 
-    // Crea la aplicación con SQL Server. La cadena de conexión puede ser incompleta, se completará con el nombre de la base y otras opciones.
-    public static Aplicacion ConSqlServer(string cadenaConexion)
-    {
-        var cadena = CreadorBase.Completar(cadenaConexion);
-        return new(new SqlDatosSeguridad(cadena), new SqlDatosRegistros(cadena), "SQL Server", () => CreadorBase.AsegurarBase(cadena));
-    }
-
-    // Lo mismo con PostgreSQL (por ejemplo, el servidor superjarvis). Cadena: Host=...;Username=...;Password=...
-    // Es un servidor externo: por defecto solo se comprueba que la base esté lista y NO se cargan datos de ejemplo.
-    // Con crearBase = true (la app abierta con --crear-base) se crea o actualiza la base y se cargan los datos de ejemplo si está vacía.
+    // crea la aplicación con PostgreSQL. Cadena: Host=...;Username=...;Password=... (si no dice Database, se usa oficinaregistros).
+    // por defecto solo se comprueba que la base esté lista (y se aplican las migraciones pendientes); NO se cargan datos de ejemplo.
+    // con crearBase = true (la app abierta con --crear-base) se crea o actualiza la base y se cargan los datos de ejemplo si está vacía.
     public static Aplicacion ConPostgres(string cadenaConexion, bool crearBase = false)
     {
         var cadena = CreadorBasePg.Completar(cadenaConexion);

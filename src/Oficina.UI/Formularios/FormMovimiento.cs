@@ -102,6 +102,8 @@ internal class FormMovimiento : FormularioDatos
         {
             _estadoActa.Text = a.Eliminado
                 ? "Esa acta está dada de baja."
+                : a.Archivada
+                ? $"Esa acta está terminada: se archivó en un lote ({a.TextoMotivoArchivo?.ToLowerInvariant()}) y no admite movimientos nuevos."
                 : $"El acta ya existe (versión {a.Version}): se le agrega el movimiento. Para cambiar sus datos use «Modificar acta» en la ficha.";
             _nroActa.Text = a.NroActa;
             _fechaActa.Value = a.FechaActa;

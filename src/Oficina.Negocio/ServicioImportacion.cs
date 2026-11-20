@@ -5,11 +5,7 @@ using Oficina.Entidades;
 
 namespace Oficina.Negocio;
 
-// Carga de datos desde una planilla (CSV o Excel) a un sector.
-// Funciona en dos pasos: Analizar() lee el archivo y valida cada fila SIN guardar nada (vista previa),
-// e Importar() guarda las filas que salieron bien. Usa las mismas validaciones, permisos e historial que la carga a mano
-// (ServicioRegistros), así que una fila que no se podría cargar a mano tampoco entra por acá.
-// Las fechas son las del archivo: las grillas ordenan por fecha, no por cuándo se cargó.
+// funcion para traer datos de un excel 
 
 public class FilaImportacion
 {
@@ -53,7 +49,7 @@ public class ServicioImportacion : ServicioBase
     public ServicioImportacion(Sesion sesion, IDatosRegistros datos) : base(sesion, datos)
         => _registros = new ServicioRegistros(sesion, datos);
 
-    // ---------- Columnas que se reconocen (sin distinguir mayúsculas, acentos ni signos) ----------
+    // columnas que se reconocen (sin distinguir mayúsculas, acentos ni signos)
 
     private record Campo(string Clave, bool Obligatorio, params string[] Nombres);
 
@@ -86,6 +82,7 @@ public class ServicioImportacion : ServicioBase
             new("caso", true, "N° de caso", "Nro caso", "Caso"),
             new("fecha", true, "Fecha de ingreso", "Ingreso", "Fecha"),
             new("origen", false, "Origen"),
+            new("categoria", false, "Categoría", "Tipo de reclamo"),
             new("estado", false, "Estado"),
             new("direccion", true, "Dirección", "Ubicación"),
             new("entrecalles", false, "Entrecalles"),
@@ -112,9 +109,10 @@ public class ServicioImportacion : ServicioBase
     };
 
     // columnas que trae el exportador y que no se cargan (se calculan o son de la base): no se avisan como ignoradas
-    private static readonly string[] ColumnasQueSeCalculan = ["ultimocambio", "total", "sector"];
+    // (el N° de apremio no se importa: lo carga Apremio desde la ficha del acta)
+    private static readonly string[] ColumnasQueSeCalculan = ["ultimocambio", "total", "sector", "ndeapremio"];
 
-    // ---------- Plantilla ----------
+    // pantilla
 
     public void GuardarPlantilla(int idSector, string ruta)
     {
@@ -126,7 +124,7 @@ public class ServicioImportacion : ServicioBase
 
     public static string NombrePlantilla(Sector s) => $"Plantilla {s.Nombre}.csv";
 
-    // ---------- Paso 1: leer y validar sin guardar ----------
+    //  leer y validar
 
     public VistaPreviaImportacion Analizar(int idSector, string ruta)
     {
@@ -200,7 +198,7 @@ public class ServicioImportacion : ServicioBase
     private static object Valor(Contexto c, object[] celdas, string clave)
         => c.Col.TryGetValue(clave, out int i) && i < celdas.Length ? celdas[i] : null;
 
-    // ----- Actas y movimientos -----
+    // actas y movimiento
 
     private void ParsearActa(Contexto c, object[] x, FilaImportacion fila)
     {
@@ -240,6 +238,7 @@ public class ServicioImportacion : ServicioBase
         else
         {
             if (existente.Eliminado) throw new ExcepcionNegocio("Esa acta está dada de baja.");
+            if (existente.Archivada) throw new ExcepcionNegocio("Esa acta está archivada en un lote: está terminada y no admite movimientos.");
             fila.Aviso = "El acta ya existe: se agrega solo el movimiento";
             // que no se duplique si el mismo archivo se carga dos veces
             if (Datos.ListarMovimientosDeActa(existente.IdActa).Any(m => m.IdSector == c.Sector.IdSector && m.Fecha.Date == mov.Fecha.Date
@@ -294,7 +293,7 @@ public class ServicioImportacion : ServicioBase
         return j ?? throw new ExcepcionNegocio($"El juzgado «{t}» no está en la lista.");
     }
 
-    // ----- Reclamos -----
+    // reclamos
 
     private void ParsearReclamo(Contexto c, object[] x, FilaImportacion fila)
     {
@@ -302,7 +301,7 @@ public class ServicioImportacion : ServicioBase
         var r = new Reclamo
         {
             NroCaso = Texto(V("caso")), Fecha = Fecha(V("fecha"), "Fecha de ingreso") ?? throw new ExcepcionNegocio("Falta la fecha de ingreso."),
-            Origen = Origen(Texto(V("origen"))), Estado = Estado(Texto(V("estado"))),
+            Origen = Origen(Texto(V("origen"))), Categoria = Categoria(Texto(V("categoria"))), Estado = Estado(Texto(V("estado"))),
             Ubicacion = Texto(V("direccion")), Entrecalles = Texto(V("entrecalles")), Delegacion = Texto(V("delegacion")),
             Vehiculo = Texto(V("vehiculo")), Denunciante = Texto(V("denunciante")),
             FechaVerificacion = Fecha(V("fechaverif"), "Primera verificación"), VerificadoPor = Texto(V("inspector")),
@@ -329,6 +328,16 @@ public class ServicioImportacion : ServicioBase
         throw new ExcepcionNegocio($"El origen «{t}» no es válido (Tránsito o Gestión de reclamos).");
     }
 
+    private static CategoriaReclamo? Categoria(string t)
+    {
+        if (t == null) return null;
+        string n = Norm(t);
+        if (n is "1" or "transito") return CategoriaReclamo.Transito;
+        if (n is "2" or "demanda") return CategoriaReclamo.Demanda;
+        if (n is "3" || n.StartsWith("municipal")) return CategoriaReclamo.Municipales;
+        throw new ExcepcionNegocio($"La categoría «{t}» no es válida (Tránsito, Demanda o Municipales).");
+    }
+
     private static EstadoReclamo Estado(string t)
     {
         if (t == null) return EstadoReclamo.EnAbordaje;
@@ -339,7 +348,7 @@ public class ServicioImportacion : ServicioBase
         throw new ExcepcionNegocio($"El estado «{t}» no es válido (En abordaje, Verificando o Solucionado).");
     }
 
-    // ----- Lotes -----
+    // lotes
 
     private void ParsearLote(Contexto c, object[] x, FilaImportacion fila)
     {
@@ -359,7 +368,7 @@ public class ServicioImportacion : ServicioBase
         fila.Resumen = $"{l.Fecha:dd/MM/yyyy} · Lote {l.NroLote} · {l.Total} actas";
     }
 
-    // ---------- Paso 2: guardar ----------
+    // guardar
 
     public ResultadoImportacion Importar(VistaPreviaImportacion vp, Action<int, int> progreso = null)
     {
@@ -396,7 +405,7 @@ public class ServicioImportacion : ServicioBase
         return res;
     }
 
-    // ---------- Informe de errores ----------
+    // informe de errores 
 
     public void GuardarInforme(VistaPreviaImportacion vp, IEnumerable<FilaImportacion> errores, string ruta)
     {
@@ -422,7 +431,7 @@ public class ServicioImportacion : ServicioBase
         return s.IndexOfAny([';', '"', '\n', '\r']) >= 0 ? "\"" + s.Replace("\"", "\"\"") + "\"" : s;
     }
 
-    // ---------- Lectura de valores ----------
+    // lectura de valores
 
     // sin mayúsculas, acentos, espacios ni signos: «N° de causa» = «nro. de causa»... (solo lo que coincide por texto)
     internal static string Norm(string s)
@@ -491,11 +500,11 @@ public class ServicioImportacion : ServicioBase
         if (string.IsNullOrEmpty(t)) return null;
         decimal r;
         bool ok;
-        if (t.Contains(',') && t.Contains('.')) ok = decimal.TryParse(t, NumberStyles.Number, Formatos.Cultura, out r);           // 1.234,56
-        else if (t.Contains(',')) ok = decimal.TryParse(t, NumberStyles.Number, Formatos.Cultura, out r);                          // 1234,56
-        else if (System.Text.RegularExpressions.Regex.IsMatch(t, @"^-?\d{1,3}(\.\d{3})+$"))                                         // 1.234 (miles)
+        if (t.Contains(',') && t.Contains('.')) ok = decimal.TryParse(t, NumberStyles.Number, Formatos.Cultura, out r);         
+        else if (t.Contains(',')) ok = decimal.TryParse(t, NumberStyles.Number, Formatos.Cultura, out r);                          
+        else if (System.Text.RegularExpressions.Regex.IsMatch(t, @"^-?\d{1,3}(\.\d{3})+$"))                                         
             ok = decimal.TryParse(t, NumberStyles.Number, Formatos.Cultura, out r);
-        else ok = decimal.TryParse(t, NumberStyles.Number, CultureInfo.InvariantCulture, out r);                                    // 1234.56
+        else ok = decimal.TryParse(t, NumberStyles.Number, CultureInfo.InvariantCulture, out r);                                    
         return ok ? Math.Round(r, 2) : throw new ExcepcionNegocio($"{campo}: «{t}» no es un monto válido.");
     }
 

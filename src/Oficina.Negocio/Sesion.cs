@@ -10,7 +10,7 @@ public class ExcepcionNegocio : Exception
     public ExcepcionNegocio(string mensaje, Exception interna = null) : base(mensaje, interna) { }
 }
 
-//m guardado de hash y sal de contraseñas, verificación y validación de longitud
+// guardado de hash y sal de contraseñas, verificación y validación de longitud
 public static class Contrasenas
 {
     private const int Iteraciones = 100_000;
@@ -86,7 +86,7 @@ public class Sesion
     }
 
    
-    // Deja solo las filas de historial de sectores que la cuenta ve, y oculta el nombre de las cuentas
+    // deja solo las filas de historial de sectores que la cuenta ve, y oculta el nombre de las cuentas
     public List<EntradaHistorial> Filtrar(IEnumerable<EntradaHistorial> historial)
     {
         if (EsAdministrador) return historial.ToList();
@@ -96,7 +96,7 @@ public class Sesion
         return lista;
     }
 
-    // Entra con usuario y contraseña. Devuelve la sesión o lanza ExcepcionNegocio 
+    // emtra con usuario y contraseña. Devuelve la sesión o lanza ExcepcionNegocio 
     public static Sesion Ingresar(IDatosSeguridad datos, string nombreUsuario, string clave)
     {
         var u = string.IsNullOrWhiteSpace(nombreUsuario) ? null : datos.ObtenerUsuario(nombreUsuario.Trim());

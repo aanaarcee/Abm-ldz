@@ -11,7 +11,7 @@ internal class FormActa : Form
     private readonly Label _titulo, _version;
     private readonly TableLayoutPanel _datos;
     private readonly ListView _recorrido, _comparacion, _versiones, _historial;
-    private readonly Button _modificar;
+    private readonly Button _modificar, _apremio;
     private FichaActa _ficha;
 
     public bool HuboCambios { get; private set; }
@@ -33,15 +33,18 @@ internal class FormActa : Form
         _titulo = Estilo.Etiqueta("", Estilo.Titulo);
         _version = Estilo.Etiqueta("", color: Estilo.TextoSuave);
         _modificar = Estilo.Boton("Modificar acta", (_, _) => Modificar(), principal: true);
+        _apremio = Estilo.Boton("N° de apremio", (_, _) => CambiarApremio());
         var cerrar = Estilo.Boton("Cerrar", (_, _) => Close());
 
-        var arriba = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 3 };
+        var arriba = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 4 };
         arriba.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         arriba.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         arriba.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        arriba.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         arriba.Controls.Add(_titulo, 0, 0);
-        arriba.Controls.Add(_modificar, 1, 0);
-        arriba.Controls.Add(cerrar, 2, 0);
+        arriba.Controls.Add(_apremio, 1, 0);
+        arriba.Controls.Add(_modificar, 2, 0);
+        arriba.Controls.Add(cerrar, 3, 0);
         arriba.Controls.Add(_version, 0, 1);
 
         _datos = new TableLayoutPanel
@@ -90,7 +93,15 @@ internal class FormActa : Form
         _version.Text = a.Version == 1
             ? $"Acta original, sin modificaciones · cargada el {Estilo.FechaHora(a.FechaAlta)}"
             : $"Versión {a.Version} · modificada el {Estilo.FechaHora(a.FechaModif ?? a.FechaAlta)} · ver «Original y actual»";
-        _modificar.Visible = _ficha.PuedeModificar && !a.Eliminado;
+        _version.ForeColor = Estilo.TextoSuave;
+        if (a.Archivada)
+        {
+            _version.Text = $"Terminada: archivada en el lote {_ficha.NroLote} el {Estilo.Fecha(a.FechaArchivo.Value)} " +
+                            $"({a.TextoMotivoArchivo?.ToLowerInvariant()}). No admite cambios. · " + _version.Text;
+            _version.ForeColor = Estilo.Positivo;
+        }
+        _modificar.Visible = _ficha.PuedeModificar;
+        _apremio.Visible = _ficha.PuedeCargarApremio;
 
         _datos.SuspendLayout();
         _datos.Controls.Clear();
@@ -110,6 +121,8 @@ internal class FormActa : Form
         Dato("Repartición", a.Reparticion);
         Dato("Suma reclamada", a.SumaReclamada?.ToString("N2", Formatos.Cultura));
         Dato("Gastos administrativos", a.GastosAdministrativos?.ToString("N2", Formatos.Cultura));
+        Dato("N° de apremio", a.NroApremio);
+        Dato("Archivo", a.Archivada ? $"Lote {_ficha.NroLote} · {a.TextoMotivoArchivo} · {Estilo.Fecha(a.FechaArchivo.Value)}" : null);
         Dato("Observaciones", a.Observaciones);
         _datos.ResumeLayout();
 
@@ -148,6 +161,20 @@ internal class FormActa : Form
         lista.Items.Clear();
         lista.Items.AddRange(items.ToArray());
         lista.EndUpdate();
+    }
+
+    // Apremio le da a cada acta su propio número (P29)
+    private void CambiarApremio()
+    {
+        var nro = Dialogo.PedirTexto(this, "N° de apremio", "Número propio que le da Apremio a esta acta (vacío para borrarlo):", _ficha.Acta.NroApremio ?? "");
+        if (nro == null) return;
+        try
+        {
+            _servicio.CambiarNroApremio(_idActa, nro);
+            HuboCambios = true;
+            Cargar();
+        }
+        catch (ExcepcionNegocio ex) { Dialogo.MostrarError(ex); }
     }
 
     private void Modificar()

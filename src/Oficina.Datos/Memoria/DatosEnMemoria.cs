@@ -3,7 +3,7 @@ using Oficina.Entidades;
 
 namespace Oficina.Datos.Memoria;
 
-// Implementación en memoria: sirve para probar la aplicación sin SQL Server (se pierde al cerrar).
+// Implementación en memoria: sirve para probar la aplicación sin base de datos (se pierde al cerrar).
 // Devuelve copias para que la interfaz no cambie los datos guardados sin pasar por Guardar.
 public class DatosEnMemoria : IDatosSeguridad, IDatosRegistros
 {
@@ -226,7 +226,7 @@ public class DatosEnMemoria : IDatosSeguridad, IDatosRegistros
         var a = Completar(_actas.First(x => x.IdActa == m.IdActa));
         c.Sector = _sectores.FirstOrDefault(s => s.IdSector == m.IdSector)?.Nombre;
         c.NroCausa = a.NroCausa; c.Reparticion = a.Reparticion; c.Anio = a.Anio; c.NroActa = a.NroActa;
-        c.Persona = a.Persona; c.Documento = a.Documento; c.SumaReclamada = a.SumaReclamada; c.GastosAdministrativos = a.GastosAdministrativos;
+        c.Persona = a.Persona; c.Documento = a.Documento; c.NroApremio = a.NroApremio; c.SumaReclamada = a.SumaReclamada; c.GastosAdministrativos = a.GastosAdministrativos;
         return c;
     }
 
@@ -299,6 +299,12 @@ public class DatosEnMemoria : IDatosSeguridad, IDatosRegistros
         lock (_candado) return _lotes.Where(l => !l.Eliminado).OrderByDescending(l => l.Fecha).ThenByDescending(l => l.IdLote).Select(Copia).ToList();
     }
 
+    public List<Acta> ListarActasDeLote(int idLote)
+    {
+        lock (_candado)
+            return _actas.Where(a => a.IdLote == idLote).OrderByDescending(a => a.FechaArchivo).ThenByDescending(a => a.IdActa).Select(Completar).ToList();
+    }
+
     public void GuardarLote(Lote lote)
     {
         lock (_candado)
@@ -363,13 +369,13 @@ public class DatosEnMemoria : IDatosSeguridad, IDatosRegistros
                 var p = _personas.FirstOrDefault(x => x.IdPersona == a.IdPersona);
                 var codigo = _reparticiones.FirstOrDefault(r => r.IdReparticion == a.IdReparticion)?.Codigo.ToString();
                 bool coincide = a.Anio.ToString() == t || codigo == t || TextoBusqueda.AlgunoContiene(t, a.NroCausa, a.NroActa, a.Reparticion,
-                    a.Dominio, p?.Apellido, p?.Nombre, p?.NroDocumento, a.Observaciones, m.Detalle, m.Remito, m.Observaciones);
+                    a.Dominio, p?.Apellido, p?.Nombre, p?.NroDocumento, a.Observaciones, m.Detalle, m.Remito, m.Observaciones, a.NroApremio);
                 if (!coincide) continue;
                 lista.Add(new ResultadoBusqueda
                 {
                     Tipo = "Acta", IdSector = m.IdSector, Sector = _sectores.First(s => s.IdSector == m.IdSector).Nombre,
                     Id = m.IdMovimiento, IdActa = a.IdActa, Titulo = $"Causa {a.NroCausa} · {a.Reparticion} · {a.Anio}",
-                    Detalle = $"Acta {a.NroActa}" + (a.Persona != null ? $" · {a.Persona}" : "") + (a.Dominio != null ? $" · Dominio {a.Dominio}" : "") + $" · {m.Detalle}"
+                    Detalle = $"Acta {a.NroActa}" + (a.NroApremio != null ? $" · Apremio {a.NroApremio}" : "") + (a.Persona != null ? $" · {a.Persona}" : "") + (a.Dominio != null ? $" · Dominio {a.Dominio}" : "") + $" · {m.Detalle}"
                               + (string.IsNullOrEmpty(m.Remito) ? "" : $" · Remito {m.Remito}"),
                     Fecha = m.Fecha
                 });

@@ -2,7 +2,7 @@ using System.Globalization;
 
 namespace Oficina.Datos;
 
-//Compara texto como lo hace la base (Modern_Spanish_CI_AI): sin mayúsculas ni acentos
+// compara texto como lo hace la base (colación ci_ai y unaccent): sin mayúsculas ni acentos
 public static class TextoBusqueda
 {
     private static readonly CompareInfo Comparador = new CultureInfo("es-AR").CompareInfo;
@@ -14,7 +14,7 @@ public static class TextoBusqueda
         return !string.IsNullOrEmpty(donde) && Comparador.IndexOf(donde, que, Opciones) >= 0;
     }
 
-    /// Verdadero si alguno de los campos contiene el texto
+    // verdadero si alguno de los campos contiene el texto
     public static bool AlgunoContiene(string que, params string[] campos) => campos.Any(c => Contiene(c, que));
 
     public static bool Iguales(string a, string b) => Comparador.Compare(a ?? "", b ?? "", Opciones) == 0;

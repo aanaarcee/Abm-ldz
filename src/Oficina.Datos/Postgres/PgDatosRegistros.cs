@@ -96,6 +96,8 @@ public class PgDatosRegistros : ConexionPg, IDatosRegistros
             NroActa = r.Texto("NroActa"), IdJuzgado = r.EnteroN("IdJuzgado"), IdPersona = r.EnteroN("IdPersona"), Dominio = r.Texto("Dominio"),
             FechaActa = r.Fecha("FechaActa"),
             SumaReclamada = r.DecimalN("SumaReclamada"), GastosAdministrativos = r.DecimalN("GastosAdministrativos"), Observaciones = r.Texto("Observaciones"), Version = r.Entero("Version"),
+            IdLote = r.EnteroN("IdLote"), MotivoArchivo = (MotivoArchivo?)r.EnteroN("MotivoArchivo"), FechaArchivo = r.FechaN("FechaArchivo"),
+            NroApremio = r.Texto("NroApremio"),
             Reparticion = r.Texto("NombreReparticion"), Juzgado = r.Texto("NombreJuzgado"), Persona = r.Texto("NombrePersona"), Documento = r.Texto("Documento")
         };
         Auditoria(a, r);
@@ -115,19 +117,21 @@ public class PgDatosRegistros : ConexionPg, IDatosRegistros
             P("@Causa", acta.NroCausa), P("@Rep", acta.IdReparticion), P("@Anio", acta.Anio), P("@NroActa", acta.NroActa),
             P("@Juzgado", acta.IdJuzgado), P("@Persona", acta.IdPersona), P("@Dominio", acta.Dominio), P("@FechaActa", acta.FechaActa.Date),
             P("@SumaReclamada", acta.SumaReclamada), P("@GastosAdministrativos", acta.GastosAdministrativos), P("@Obs", acta.Observaciones), P("@Version", acta.Version),
+            P("@Lote", acta.IdLote), P("@MotivoArchivo", (byte?)acta.MotivoArchivo), P("@FechaArchivo", acta.FechaArchivo?.Date), P("@Apremio", acta.NroApremio),
             .. ParametrosAuditoria(acta)
         ];
         if (acta.IdActa == 0)
             acta.IdActa = Insertar("""
                 INSERT INTO Acta (NroCausa, IdReparticion, Anio, NroActa, IdJuzgado, IdPersona, Dominio, FechaActa, SumaReclamada, GastosAdministrativos, Observaciones,
-                                  Version, Eliminado, IdUsuarioAlta, FechaAlta, IdUsuarioModif, FechaModif)
+                                  Version, IdLote, MotivoArchivo, FechaArchivo, NroApremio, Eliminado, IdUsuarioAlta, FechaAlta, IdUsuarioModif, FechaModif)
                 VALUES (@Causa, @Rep, @Anio, @NroActa, @Juzgado, @Persona, @Dominio, @FechaActa, @SumaReclamada, @GastosAdministrativos, @Obs,
-                        @Version, @Eliminado, @UsuarioAlta, @FechaAlta, @UsuarioModif, @FechaModif)
+                        @Version, @Lote, @MotivoArchivo, @FechaArchivo, @Apremio, @Eliminado, @UsuarioAlta, @FechaAlta, @UsuarioModif, @FechaModif)
                 """, ps);
         else
             Ejecutar("""
                 UPDATE Acta SET NroCausa = @Causa, IdReparticion = @Rep, Anio = @Anio, NroActa = @NroActa, IdJuzgado = @Juzgado,
                     IdPersona = @Persona, Dominio = @Dominio, FechaActa = @FechaActa, SumaReclamada = @SumaReclamada, GastosAdministrativos = @GastosAdministrativos, Observaciones = @Obs, Version = @Version,
+                    IdLote = @Lote, MotivoArchivo = @MotivoArchivo, FechaArchivo = @FechaArchivo, NroApremio = @Apremio,
                     Eliminado = @Eliminado, IdUsuarioModif = @UsuarioModif, FechaModif = @FechaModif
                 WHERE IdActa = @Id
                 """, [.. ps, P("@Id", acta.IdActa)]);
@@ -163,7 +167,7 @@ public class PgDatosRegistros : ConexionPg, IDatosRegistros
 
     private const string SelectMovimiento = $"""
         SELECT m.*, s.Nombre AS NombreSector, a.NroCausa, CONCAT(r.Codigo, ' · ', r.Nombre) AS NombreReparticion, a.Anio, a.NroActa,
-               {NombrePersona} AS NombrePersona, p.NroDocumento AS Documento, a.SumaReclamada, a.GastosAdministrativos
+               {NombrePersona} AS NombrePersona, p.NroDocumento AS Documento, a.NroApremio, a.SumaReclamada, a.GastosAdministrativos
         FROM Movimiento m
         JOIN Sector s      ON s.IdSector = m.IdSector
         JOIN Acta a        ON a.IdActa = m.IdActa
@@ -178,7 +182,7 @@ public class PgDatosRegistros : ConexionPg, IDatosRegistros
             IdMovimiento = r.Entero("IdMovimiento"), IdActa = r.Entero("IdActa"), IdSector = r.Entero("IdSector"), Fecha = r.Fecha("Fecha"),
             Detalle = r.Texto("Detalle"), Remito = r.Texto("Remito"), Observaciones = r.Texto("Observaciones"),
             Sector = r.Texto("NombreSector"), NroCausa = r.Texto("NroCausa"), Reparticion = r.Texto("NombreReparticion"), Anio = r.Entero("Anio"),
-            NroActa = r.Texto("NroActa"), Persona = r.Texto("NombrePersona"), Documento = r.Texto("Documento"),
+            NroActa = r.Texto("NroActa"), Persona = r.Texto("NombrePersona"), Documento = r.Texto("Documento"), NroApremio = r.Texto("NroApremio"),
             SumaReclamada = r.DecimalN("SumaReclamada"), GastosAdministrativos = r.DecimalN("GastosAdministrativos")
         };
         Auditoria(m, r);
@@ -228,7 +232,7 @@ public class PgDatosRegistros : ConexionPg, IDatosRegistros
         var x = new Reclamo
         {
             IdReclamo = r.Entero("IdReclamo"), NroCaso = r.Texto("NroCaso"), Fecha = r.Fecha("Fecha"),
-            Origen = (OrigenReclamo?)r.EnteroN("Origen"), Estado = (EstadoReclamo)r.Entero("Estado"), Ubicacion = r.Texto("Ubicacion"),
+            Origen = (OrigenReclamo?)r.EnteroN("Origen"), Categoria = (CategoriaReclamo?)r.EnteroN("Categoria"), Estado = (EstadoReclamo)r.Entero("Estado"), Ubicacion = r.Texto("Ubicacion"),
             Entrecalles = r.Texto("Entrecalles"), Delegacion = r.Texto("Delegacion"), Vehiculo = r.Texto("Vehiculo"), Denunciante = r.Texto("Denunciante"),
             Verificado = r.Logico("Verificado"), FechaVerificacion = r.FechaN("FechaVerificacion"), VerificadoPor = r.Texto("VerificadoPor"),
             NroActaInfraccion = r.Texto("NroActaInfraccion"), FechaNotificacion = r.FechaN("FechaNotificacion"), Observaciones = r.Texto("Observaciones")
@@ -245,7 +249,7 @@ public class PgDatosRegistros : ConexionPg, IDatosRegistros
     {
         NpgsqlParameter[] ps =
         [
-            P("@Caso", x.NroCaso), P("@Fecha", x.Fecha.Date), P("@Origen", (byte?)x.Origen), P("@Estado", (byte)x.Estado),
+            P("@Caso", x.NroCaso), P("@Fecha", x.Fecha.Date), P("@Origen", (byte?)x.Origen), P("@Categoria", (byte?)x.Categoria), P("@Estado", (byte)x.Estado),
             P("@Ubicacion", x.Ubicacion), P("@Entrecalles", x.Entrecalles), P("@Delegacion", x.Delegacion), P("@Vehiculo", x.Vehiculo),
             P("@Denunciante", x.Denunciante), P("@Verificado", x.Verificado), P("@FechaVerif", x.FechaVerificacion?.Date),
             P("@VerifPor", x.VerificadoPor), P("@ActaInfr", x.NroActaInfraccion), P("@FechaNotif", x.FechaNotificacion?.Date),
@@ -253,16 +257,16 @@ public class PgDatosRegistros : ConexionPg, IDatosRegistros
         ];
         if (x.IdReclamo == 0)
             x.IdReclamo = Insertar("""
-                INSERT INTO Reclamo (NroCaso, Fecha, Origen, Estado, Ubicacion, Entrecalles, Delegacion, Vehiculo, Denunciante, Verificado,
+                INSERT INTO Reclamo (NroCaso, Fecha, Origen, Categoria, Estado, Ubicacion, Entrecalles, Delegacion, Vehiculo, Denunciante, Verificado,
                                      FechaVerificacion, VerificadoPor, NroActaInfraccion, FechaNotificacion, Observaciones,
                                      Eliminado, IdUsuarioAlta, FechaAlta, IdUsuarioModif, FechaModif)
-                VALUES (@Caso, @Fecha, @Origen, @Estado, @Ubicacion, @Entrecalles, @Delegacion, @Vehiculo, @Denunciante, @Verificado,
+                VALUES (@Caso, @Fecha, @Origen, @Categoria, @Estado, @Ubicacion, @Entrecalles, @Delegacion, @Vehiculo, @Denunciante, @Verificado,
                         @FechaVerif, @VerifPor, @ActaInfr, @FechaNotif, @Obs,
                         @Eliminado, @UsuarioAlta, @FechaAlta, @UsuarioModif, @FechaModif)
                 """, ps);
         else
             Ejecutar("""
-                UPDATE Reclamo SET NroCaso = @Caso, Fecha = @Fecha, Origen = @Origen, Estado = @Estado, Ubicacion = @Ubicacion,
+                UPDATE Reclamo SET NroCaso = @Caso, Fecha = @Fecha, Origen = @Origen, Categoria = @Categoria, Estado = @Estado, Ubicacion = @Ubicacion,
                     Entrecalles = @Entrecalles, Delegacion = @Delegacion, Vehiculo = @Vehiculo, Denunciante = @Denunciante,
                     Verificado = @Verificado, FechaVerificacion = @FechaVerif, VerificadoPor = @VerifPor, NroActaInfraccion = @ActaInfr,
                     FechaNotificacion = @FechaNotif, Observaciones = @Obs, Eliminado = @Eliminado,
@@ -287,6 +291,9 @@ public class PgDatosRegistros : ConexionPg, IDatosRegistros
     public Lote ObtenerLote(int idLote) => LeerUno("SELECT * FROM Lote WHERE IdLote = @Id", MapLote, P("@Id", idLote));
 
     public List<Lote> ListarLotes() => Leer("SELECT * FROM Lote WHERE Eliminado = false ORDER BY Fecha DESC, IdLote DESC", MapLote);
+
+    public List<Acta> ListarActasDeLote(int idLote) =>
+        Leer(SelectActa + " WHERE a.IdLote = @Lote ORDER BY a.FechaArchivo DESC, a.IdActa DESC", MapActa, P("@Lote", idLote));
 
     public void GuardarLote(Lote x)
     {

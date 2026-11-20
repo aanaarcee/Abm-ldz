@@ -3,8 +3,8 @@ using ExcelDataReader;
 
 namespace Oficina.Negocio;
 
-// Lee una planilla (CSV o Excel) y devuelve sus filas con el número que tienen en el archivo (la 1 es el encabezado).
-// Las filas completamente vacías se saltean. Cada celda llega como la trae el archivo: texto, número o fecha.
+// lee una planilla (CSV o Excel) y devuelve sus filas con el número que tienen en el archivo (la 1 es el encabezado).
+// las filas completamente vacías se saltean. Cada celda llega como la trae el archivo: texto, número o fecha.
 internal static class LectorPlanilla
 {
     static LectorPlanilla() => Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);

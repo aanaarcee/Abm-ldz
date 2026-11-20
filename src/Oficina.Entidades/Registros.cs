@@ -59,7 +59,21 @@ public class Acta : RegistroAuditado
     public string Observaciones { get; set; }
     public int Version { get; set; } = 1;
 
-    // Datos para mostrar, completados por la capa de datos
+    // archivo: con lote, el acta está terminada (P12, P13). Los tres van juntos o ninguno.
+    public int? IdLote { get; set; }
+    public MotivoArchivo? MotivoArchivo { get; set; }
+    public DateTime? FechaArchivo { get; set; }
+    public string NroApremio { get; set; }               // número propio que le da Apremio (P29)
+
+    public bool Archivada => IdLote.HasValue;
+    public string TextoMotivoArchivo => MotivoArchivo switch
+    {
+        Entidades.MotivoArchivo.SentenciaDefinitiva => "Sentencia definitiva",
+        Entidades.MotivoArchivo.Pagada => "Pagada",
+        _ => null
+    };
+
+    // datos para mostrar, completados por la capa de datos
     public string Reparticion { get; set; }
     public string Juzgado { get; set; }
     public string Persona { get; set; }
@@ -110,7 +124,7 @@ public class Movimiento : RegistroAuditado
     public string Remito { get; set; }
     public string Observaciones { get; set; }
 
-    // Datos del acta para mostrar en la grilla del sector
+    // datos del acta para mostrar en la grilla del sector
     public string Sector { get; set; }
     public string NroCausa { get; set; }
     public string Reparticion { get; set; }
@@ -118,6 +132,7 @@ public class Movimiento : RegistroAuditado
     public string NroActa { get; set; }
     public string Persona { get; set; }
     public string Documento { get; set; }
+    public string NroApremio { get; set; }
     public decimal? SumaReclamada { get; set; }
     public decimal? GastosAdministrativos { get; set; }
 }
@@ -140,6 +155,12 @@ public enum OrigenReclamo : byte { Transito = 1, GestionDeReclamos = 2 }
 
 public enum EstadoReclamo : byte { EnAbordaje = 1, Verificando = 2, Solucionado = 3 }
 
+// de qué tipo es el reclamo (P20)
+public enum CategoriaReclamo : byte { Transito = 1, Demanda = 2, Municipales = 3 }
+
+// por qué se archivó un acta: no hay otra forma de terminar (P12)
+public enum MotivoArchivo : byte { SentenciaDefinitiva = 1, Pagada = 2 }
+
 // avisos de los reclamos de los vecinos, que no son actas ni movimientos
 public class Reclamo : RegistroAuditado
 {
@@ -147,6 +168,7 @@ public class Reclamo : RegistroAuditado
     public string NroCaso { get; set; }
     public DateTime Fecha { get; set; }
     public OrigenReclamo? Origen { get; set; }
+    public CategoriaReclamo? Categoria { get; set; }
     public EstadoReclamo Estado { get; set; } = EstadoReclamo.EnAbordaje;
     public string Ubicacion { get; set; }
     public string Entrecalles { get; set; }
@@ -164,6 +186,14 @@ public class Reclamo : RegistroAuditado
     {
         OrigenReclamo.Transito => "Tránsito",
         OrigenReclamo.GestionDeReclamos => "Gestión de reclamos",
+        _ => null
+    };
+
+    public string TextoCategoria => Categoria switch
+    {
+        CategoriaReclamo.Transito => "Tránsito",
+        CategoriaReclamo.Demanda => "Demanda",
+        CategoriaReclamo.Municipales => "Municipales",
         _ => null
     };
 
@@ -193,7 +223,7 @@ public class EntradaHistorial
 // fila de la busqueda general
 public class ResultadoBusqueda
 {
-    public string Tipo { get; set; }          // Acta, Reclamo, Lote
+    public string Tipo { get; set; }          // acta, Reclamo, Lote
     public int IdSector { get; set; }
     public string Sector { get; set; }
     public int Id { get; set; }               // IdMovimiento, IdReclamo o IdLote

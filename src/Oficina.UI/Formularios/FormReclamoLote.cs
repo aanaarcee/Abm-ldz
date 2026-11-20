@@ -11,7 +11,7 @@ internal class FormReclamo : FormularioDatos
     private readonly Reclamo _existente;
     private readonly TextBox _caso, _ubicacion, _entrecalles, _delegacion, _vehiculo, _denunciante, _verificadoPor, _actaInfraccion, _obs;
     private readonly DateTimePicker _fecha, _fechaVerif, _fechaNotificacion;
-    private readonly ComboBox _origen, _estado;
+    private readonly ComboBox _origen, _categoria, _estado;
     private readonly CheckBox _verificado;
 
     private record Opcion<T>(T Valor, string Texto)
@@ -33,6 +33,11 @@ internal class FormReclamo : FormularioDatos
         {
             new Opcion<OrigenReclamo?>(null, "(sin dato)"), new Opcion<OrigenReclamo?>(OrigenReclamo.Transito, "Tránsito"),
             new Opcion<OrigenReclamo?>(OrigenReclamo.GestionDeReclamos, "Gestión de reclamos (página del municipio)")
+        }));
+        _categoria = Campo("Categoría", Lista(new[]
+        {
+            new Opcion<CategoriaReclamo?>(null, "(sin dato)"), new Opcion<CategoriaReclamo?>(CategoriaReclamo.Transito, "Tránsito"),
+            new Opcion<CategoriaReclamo?>(CategoriaReclamo.Demanda, "Demanda"), new Opcion<CategoriaReclamo?>(CategoriaReclamo.Municipales, "Municipales")
         }));
         _estado = Campo("Estado", Lista(new[]
         {
@@ -63,6 +68,7 @@ internal class FormReclamo : FormularioDatos
             _caso.Text = existente.NroCaso;
             _fecha.Value = existente.Fecha;
             Elegir<Opcion<OrigenReclamo?>>(_origen, o => o.Valor == existente.Origen);
+            Elegir<Opcion<CategoriaReclamo?>>(_categoria, o => o.Valor == existente.Categoria);
             Elegir<Opcion<EstadoReclamo>>(_estado, o => o.Valor == existente.Estado);
             _ubicacion.Text = existente.Ubicacion;
             _entrecalles.Text = existente.Entrecalles;
@@ -88,7 +94,7 @@ internal class FormReclamo : FormularioDatos
         var r = new Reclamo
         {
             IdReclamo = _existente?.IdReclamo ?? 0, NroCaso = _caso.Text, Fecha = _fecha.Value.Date,
-            Origen = ((Opcion<OrigenReclamo?>)_origen.SelectedItem).Valor, Estado = ((Opcion<EstadoReclamo>)_estado.SelectedItem).Valor,
+            Origen = ((Opcion<OrigenReclamo?>)_origen.SelectedItem).Valor, Categoria = ((Opcion<CategoriaReclamo?>)_categoria.SelectedItem).Valor, Estado = ((Opcion<EstadoReclamo>)_estado.SelectedItem).Valor,
             Ubicacion = _ubicacion.Text, Entrecalles = _entrecalles.Text, Delegacion = _delegacion.Text,
             Vehiculo = _vehiculo.Text, Denunciante = _denunciante.Text,
             Verificado = _verificado.Checked, FechaVerificacion = _verificado.Checked ? _fechaVerif.Value.Date : null,

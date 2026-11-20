@@ -7,24 +7,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.7" />
     <PackageReference Include="Npgsql" Version="10.0.3" />
-    <!-- SqlClient 6.1.7 trae Pkcs 9.0.11, que tiene vulnerabilidades publicadas -->
-    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
   </ItemGroup>
 
-  <!-- El script de la base va dentro del programa: si la base no existe, la aplicación la crea -->
+  <!-- Los scripts de la base van dentro del programa: con el argumento crear-base la aplicación crea la base, y al abrirse aplica las migraciones -->
   <ItemGroup>
     <EmbeddedResource Include="..\..\sql\OficinaRegistros.sql" LogicalName="OficinaRegistros.sql" Link="sql\OficinaRegistros.sql" />
-    <!-- Las migraciones actualizan las bases creadas con una versión anterior del script -->
-    <EmbeddedResource Include="..\..\sql\Migraciones\*.sql" LogicalName="Migraciones.%(Filename).sql" Link="sql\Migraciones\%(Filename).sql" />
-<<<<<<< HEAD
-    <!-- Lo mismo para PostgreSQL -->
-    <EmbeddedResource Include="..\..\sql\postgres\OficinaRegistros.pg.sql" LogicalName="OficinaRegistros.pg.sql" Link="sql\postgres\OficinaRegistros.pg.sql" />
-    <!-- Cambios de estructura para PostgreSQL: sql/postgres/Migraciones/NNN_nombre.sql -->
-    <EmbeddedResource Include="..\..\sql\postgres\Migraciones\*.sql" LogicalName="MigracionesPg.%(Filename).sql" Link="sql\postgres\Migraciones\%(Filename).sql" />
-=======
->>>>>>> 1750974dc48740e1e8656074bf933e8985b95d13
+    <!-- Cambios de estructura: sql/Migraciones/NNN_nombre.sql.
+         El prefijo "MigracionesPg." no se cambia: es el nombre con el que el servidor anota las migraciones aplicadas. -->
+    <EmbeddedResource Include="..\..\sql\Migraciones\*.sql" LogicalName="MigracionesPg.%(Filename).sql" Link="sql\Migraciones\%(Filename).sql" />
   </ItemGroup>
 
   <ItemGroup>
@@ -32,4 +23,3 @@
   </ItemGroup>
 
 </Project>
-

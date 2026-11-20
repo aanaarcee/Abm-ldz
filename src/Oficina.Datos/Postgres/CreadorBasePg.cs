@@ -1,10 +1,10 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using Npgsql;
 
 namespace Oficina.Datos.Postgres;
 
 
-// forma de crear la base de datos en PostgreSQL si no existe (igual que CreadorBase, pero para PostgreSQL)
+// forma de crear la base de datos en PostgreSQL si no existe, y de aplicarle las migraciones
 
 public static class CreadorBasePg
 {
@@ -35,7 +35,7 @@ public static class CreadorBasePg
         catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.InvalidCatalogName)
         {
             throw new InvalidOperationException(
-                $"La base '{nombre}' no existe en el servidor {b.Host}. Revisá conexion.txt o creala abriendo la aplicación con --crear-base.", ex);
+                $"La base '{nombre}' no existe en el servidor {b.Host}. Revisá conexion.local.txt o creala abriendo la aplicación con --crear-base.", ex);
         }
         using (db)
         {
@@ -47,8 +47,12 @@ public static class CreadorBasePg
                     if (!crear)
                         throw new InvalidOperationException(
                             $"La base '{nombre}' del servidor {b.Host} está vacía (no tiene las tablas). Si es la primera vez, abrí la aplicación con --crear-base.");
-                    Ejecutar(db, LeerScript("OficinaRegistros.pg.sql"));
-                    Migrar(db);   // la estructura de partida + todos los cambios posteriores
+                    // la estructura de partida, todos los cambios posteriores y al final las funciones, que pueden usar
+                    // columnas agregadas por las migraciones (por ejemplo Acta.NroApremio)
+                    var lotes = Lotes(LeerScript("OficinaRegistros.sql")).ToList();
+                    Ejecutar(db, string.Join(Environment.NewLine + "GO" + Environment.NewLine, lotes.Where(l => !EsFuncion(l))));
+                    Migrar(db);
+                    Ejecutar(db, string.Join(Environment.NewLine + "GO" + Environment.NewLine, lotes.Where(EsFuncion)));
                     return true;
                 }
             }
@@ -83,19 +87,21 @@ public static class CreadorBasePg
     }
 
     // base que ya existía: se aplican las migraciones pendientes y, si hubo alguna (o si se pidió), se vuelven a
-    // crear las funciones de búsqueda, que siempre salen del script principal (OficinaRegistros.pg.sql)
+    // crear las funciones de búsqueda, que siempre salen del script principal (OficinaRegistros.sql)
     private static void Actualizar(NpgsqlConnection cn, bool siempreFunciones)
     {
         int aplicadas = Migrar(cn);
         if (aplicadas == 0 && !siempreFunciones) return;
-        var funciones = Lotes(LeerScript("OficinaRegistros.pg.sql")).Where(l => l.Contains("CREATE OR REPLACE FUNCTION"));
+        var funciones = Lotes(LeerScript("OficinaRegistros.sql")).Where(EsFuncion);
         Ejecutar(cn, string.Join(Environment.NewLine + "GO" + Environment.NewLine, funciones));
     }
 
-    // Migraciones: sql/postgres/Migraciones/NNN_nombre.sql (se aplican en orden de nombre, cada una una sola vez).
+    private static bool EsFuncion(string lote) => lote.Contains("CREATE OR REPLACE FUNCTION");
+
+    // Migraciones: sql/Migraciones/NNN_nombre.sql (se aplican en orden de nombre, cada una una sola vez).
     // El servidor anota las aplicadas en la tabla EsquemaMigracion. Cada migración corre en una transacción:
     // si falla, no queda nada a medias. Las separa el mismo "GO" que el script principal.
-    // OficinaRegistros.pg.sql es la estructura de partida y no se edita: todo cambio de tablas va en una migración nueva.
+    // OficinaRegistros.sql es la estructura de partida y no se edita: todo cambio de tablas va en una migración nueva.
     // Ojo: una migración ya aplicada no se vuelve a correr aunque se edite el archivo; para corregirla, otra migración.
     private static int Migrar(NpgsqlConnection cn)
     {

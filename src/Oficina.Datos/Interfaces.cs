@@ -57,6 +57,8 @@ public interface IDatosRegistros
     Lote ObtenerLote(int idLote);
     List<Lote> ListarLotes();
     void GuardarLote(Lote lote);
+    // actas archivadas en un lote (las terminadas: P12, P13)
+    List<Acta> ListarActasDeLote(int idLote);
 
     void AgregarHistorial(EntradaHistorial entrada);
     List<EntradaHistorial> ListarHistorial(string entidad, int idEntidad);

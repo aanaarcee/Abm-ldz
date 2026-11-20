@@ -1,1 +1,1 @@
-Server=.;Trusted_Connection=True;TrustServerCertificate=True
+Host=localhost;Port=5432;Database=oficinaregistros;Username=oficina;Password=

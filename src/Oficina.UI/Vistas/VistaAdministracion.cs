@@ -85,7 +85,8 @@ internal class VistaAdministracion : UserControl
             if (_sectores.Columns[e.ColumnIndex].Name == "Tipo" && e.Value is TipoSector t) { e.Value = NombreTipo(t); e.FormattingApplied = true; }
         };
         var sectores = Columna(
-            Estilo.Etiqueta("Los sectores nuevos aparecen en el menú al cerrar Configuración. Después, dé permisos al rol que corresponda.", color: Estilo.TextoSuave),
+            Estilo.Etiqueta("Los sectores nuevos aparecen en el menú al cerrar Configuración. Después, dé permisos al rol que corresponda.\n" +
+                            $"La clave {ServicioRegistros.ClaveApremio} identifica a Apremio (N° de apremio de las actas): no la cambie.", color: Estilo.TextoSuave),
             Fila(Estilo.Boton("Nuevo sector", (_, _) => EditarSector(null), principal: true),
                  Estilo.Boton("Modificar", (_, _) => { if (_sectores.CurrentRow?.DataBoundItem is Sector s) EditarSector(s); })));
         sectores.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -430,11 +431,25 @@ internal class FormSector : FormularioDatos
             _nombre.Text = existente.Nombre;
             _clave.Text = existente.Clave;
             Elegir<OpcionTipo>(_tipo, o => o.Tipo == existente.Tipo);
+            if (EsApremio(existente.Clave))
+                Nota($"⚠ La clave {ServicioRegistros.ClaveApremio} identifica al sector Apremio: solo ese sector puede cargar el N° de apremio de las actas. " +
+                     "Si se cambia, nadie (salvo el Administrador) va a poder cargarlo.");
         }
     }
 
+    private static bool EsApremio(string clave) => string.Equals(clave?.Trim(), ServicioRegistros.ClaveApremio, StringComparison.OrdinalIgnoreCase);
+
     protected override bool Guardar()
     {
+        // la aplicación reconoce a Apremio por su clave: avisar antes de romperlo (o de dárselo a otro sector)
+        if (EsApremio(_existente?.Clave) && !EsApremio(_clave.Text)
+            && !Dialogo.Confirmar($"Este sector deja de tener la clave {ServicioRegistros.ClaveApremio}.\n\n" +
+                                  "La aplicación usa esa clave para saber qué sector es Apremio. Sin ella, nadie (salvo el Administrador) " +
+                                  "va a poder cargar el N° de apremio de las actas.\n\n¿Cambiar la clave igual?"))
+            return false;
+        if (!EsApremio(_existente?.Clave) && EsApremio(_clave.Text)
+            && !Dialogo.Confirmar($"La clave {ServicioRegistros.ClaveApremio} es la de Apremio: el sector que la tenga va a poder cargar el N° de apremio de las actas.\n\n¿Seguir?"))
+            return false;
         _admin.GuardarSector(new Sector
         {
             IdSector = _existente?.IdSector ?? 0, Nombre = _nombre.Text, Clave = _clave.Text, Tipo = ((OpcionTipo)_tipo.SelectedItem).Tipo
