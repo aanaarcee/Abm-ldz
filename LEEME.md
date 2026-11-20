@@ -26,7 +26,7 @@ dotnet run --project src/Oficina.UI
 
 Para una base nueva, la primera vez: `dotnet run --project src/Oficina.UI -- --crear-base`. Crea la base, sus tablas y las migraciones, y si está vacía carga datos de ejemplo con cuentas de prueba: la aplicación muestra sus contraseñas al terminar. **Hay que cambiarlas** (Configuración → Cuentas) antes de cargar datos reales.
 
-Sin `--crear-base` la aplicación nunca crea una base ni carga ejemplos: solo aplica las migraciones pendientes. Si no puede conectarse, ofrece abrir en **modo prueba** (datos en memoria que se pierden al cerrar). También se puede forzar con `--memoria`.
+Sin `--crear-base` la aplicación nunca crea una base ni carga ejemplos: solo aplica las migraciones pendientes. Si no puede conectarse, explica el motivo (por ejemplo, la VPN desconectada) y se cierra sin cargar nada. El **modo prueba** (datos de ejemplo en memoria, que se pierden al cerrar) se abre solo a propósito, con `--memoria`, y lo avisa al entrar y en la barra de título.
 
 ## Cuentas
 
@@ -61,5 +61,10 @@ En el ingreso, al crear una cuenta y al cambiar una contraseña está la casilla
 - **Movimientos**: texto libre, con sugerencias (la oficina confirmó que no hay una lista fija).
 - **Sala Auditoría y Sentencias**: están como sectores separados que anotan movimientos sobre la misma acta.
 - **Lotes**: guardan cantidades (tránsito, competencia, prescriptas) y las actas archivadas en cada uno.
+- **Personas**: el documento (DNI o CUIT) identifica a la persona: el mismo documento es la misma persona en todas sus actas. Al escribir un documento ya cargado, el formulario completa el nombre. Si se cambia el nombre de alguien con documento, pregunta y lo corrige en todas sus actas, y la corrección queda en el historial de cada una. Una planilla importada nunca renombra a nadie: usa el nombre ya cargado y lo avisa en la fila. Sin documento no se puede saber si es la misma persona, así que el cambio queda solo en esa acta.
 - Los cambios de permisos y los sectores nuevos se ven cuando la cuenta vuelve a entrar.
-- El alta de un acta y su primer movimiento no van en una misma transacción: se valida todo antes de guardar, pero si se corta la conexión en el medio puede quedar el acta sin movimiento.
+
+## Guardado seguro
+
+- **Todo o nada**: cada operación (por ejemplo, el alta de un acta con su persona, su versión original y su primer movimiento, y las entradas del historial) se guarda en una sola transacción. Si algo falla o se corta la conexión en el medio, no queda nada a medias.
+- **Ediciones simultáneas**: si dos personas abren el mismo acta, movimiento, reclamo o lote y las dos guardan, la segunda recibe el aviso «Otra persona modificó este registro mientras usted lo tenía abierto» y su cambio no pisa al de la primera. Para esto se usa la columna de sistema `xmin` de PostgreSQL (no hizo falta cambiar las tablas).

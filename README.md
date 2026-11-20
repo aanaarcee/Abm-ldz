@@ -46,9 +46,33 @@ Hace falta **Visual Studio 2026** (o una versión que traiga el SDK de **.NET 10
 
 **Base existente:** al abrir la aplicación se aplican solas las migraciones pendientes. Sin `--crear-base` la aplicación nunca crea una base ni carga datos de ejemplo.
 
-El usuario de la cadena de conexión necesita permiso para crear tablas solo cuando hay migraciones nuevas para aplicar.
+### Dos usuarios de base
 
-Si no puede conectarse, ofrece abrir en **modo prueba**, con datos en memoria que se pierden al cerrar. También se puede forzar con `--memoria`.
+La contraseña de la base queda guardada en cada PC, así que la aplicación **no** usa el superusuario todos los días:
+
+| Usuario | Para qué | Dónde va |
+| --- | --- | --- |
+| `oficina_app` | Uso diario. Lee, carga y modifica datos. No puede cambiar ni borrar el historial ni las versiones de actas, ni tocar la estructura de la base. | `conexion.local.txt` de cada PC |
+| `oficina` (dueño de la base) | Crear la base (`--crear-base`) y aplicar migraciones nuevas. | `conexion.admin.local.txt`, solo en la PC de quien mantiene el sistema |
+
+Cuando una versión nueva trae migraciones, la aplicación abierta con `oficina_app` avisa que hay cambios pendientes. Se abre una vez con la cadena de `oficina` (copiándola a `conexion.local.txt`), se aplican solas, y se vuelve a `oficina_app`. Los dos archivos `*.local.txt` están en `.gitignore`.
+
+Para crear `oficina_app` en una base nueva (como `oficina`):
+
+```sql
+CREATE ROLE oficina_app LOGIN PASSWORD 'una-contraseña-larga';
+GRANT CONNECT ON DATABASE oficinaregistros TO oficina_app;
+GRANT USAGE ON SCHEMA public TO oficina_app;
+GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO oficina_app;
+GRANT DELETE ON Permiso TO oficina_app;
+REVOKE UPDATE ON Historial, ActaVersion FROM oficina_app;
+REVOKE INSERT, UPDATE ON EsquemaMigracion FROM oficina_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO oficina_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE oficina IN SCHEMA public GRANT SELECT, INSERT, UPDATE ON TABLES TO oficina_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE oficina IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO oficina_app;
+```
+
+Si no puede conectarse, explica el motivo y se cierra sin cargar nada. El **modo prueba** (datos en memoria que se pierden al cerrar) se abre solo a propósito, con `--memoria`.
 
 ## Estado
 

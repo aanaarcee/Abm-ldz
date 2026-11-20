@@ -24,9 +24,19 @@ public interface IDatosSeguridad
     void GuardarPermisos(int idRol, IEnumerable<Permiso> permisos);
 }
 
+// otra persona modificó el registro entre que se abrió y que se quiso guardar
+public class CambioAjenoException : InvalidOperationException
+{
+    public CambioAjenoException() : base("Otra persona modificó este registro mientras usted lo tenía abierto. " +
+                                         "Cierre la ventana y vuelva a abrirlo para ver los cambios; lo que escribió no se guardó.") { }
+}
+
 // actas movimientos y sectores
 public interface IDatosRegistros
 {
+    // varias escrituras que se guardan todas juntas o ninguna (si algo falla en el medio, se deshace todo)
+    void EnTransaccion(Action accion);
+
     List<Reparticion> ListarReparticiones();
     void GuardarReparticion(Reparticion reparticion);
     List<Juzgado> ListarJuzgados();

@@ -35,7 +35,7 @@ internal class FormPrincipal : Form, INavegador
     {
         App = app;
         Sesion = sesion;
-        Text = $"Registros de Oficina · {sesion.Rol.Nombre}";
+        Text = $"Registros de Oficina · {sesion.Rol.Nombre}" + (app.EsPrueba ? "   ⚠ MODO PRUEBA: nada se guarda" : "");
         Font = Estilo.Letra;
         BackColor = Estilo.Fondo;
         StartPosition = FormStartPosition.CenterScreen;

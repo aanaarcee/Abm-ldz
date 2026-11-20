@@ -48,7 +48,7 @@ public class ServicioRegistros : ServicioBase
 
     public List<Reclamo> Reclamos(int idSector, string filtro = null)
     {
-        Sesion.Exigir(idSector, Accion.Leer);
+        SectorDe(idSector, TipoSector.Reclamos, Accion.Leer);
         var t = filtro?.Trim();
         return Datos.ListarReclamos().Where(r => string.IsNullOrEmpty(t)
             || TextoBusqueda.AlgunoContiene(t, r.NroCaso, r.Ubicacion, r.Entrecalles, r.Delegacion, r.Vehiculo, r.Denunciante,
@@ -57,7 +57,7 @@ public class ServicioRegistros : ServicioBase
 
     public List<Lote> Lotes(int idSector, string filtro = null)
     {
-        Sesion.Exigir(idSector, Accion.Leer);
+        SectorDe(idSector, TipoSector.Lotes, Accion.Leer);
         var t = filtro?.Trim();
         return Datos.ListarLotes().Where(l => string.IsNullOrEmpty(t) || TextoBusqueda.AlgunoContiene(t, l.NroLote, l.Observaciones)).ToList();
     }
@@ -111,9 +111,17 @@ public class ServicioRegistros : ServicioBase
         {
             ValidarActa(acta);
             ValidarPersona(persona);
-            Guardar(() =>
+        }
+        else if (existente.Eliminado) throw new ExcepcionNegocio("Esa acta está dada de baja.");
+        else if (existente.Archivada) throw new ExcepcionNegocio(ActaArchivada(existente));
+
+        // el alta del acta (persona, acta, versión original) y la del movimiento van juntas: o se guarda todo o nada,
+        // así nunca queda un acta sin movimiento (que no aparecería en ningún sector)
+        Operacion(() =>
+        {
+            if (existente == null)
             {
-                acta.IdPersona = ResolverPersona(persona);
+                acta.IdPersona = ResolverPersona(persona, null, idSector);
                 acta.Version = 1;
                 acta.Eliminado = false;
                 acta.IdUsuarioAlta = Sesion.IdUsuario;
@@ -122,21 +130,19 @@ public class ServicioRegistros : ServicioBase
                 acta.FechaModif = null;
                 Datos.GuardarActa(acta);
                 Datos.AgregarVersion(ActaVersion.Desde(acta, 1, "Acta original", Sesion.IdUsuario, acta.FechaAlta));
-            });
-            Registrar("Acta", acta.IdActa, idSector, "Alta", $"Causa {acta.NroCausa} · acta {acta.NroActa}");
-        }
-        else if (existente.Eliminado) throw new ExcepcionNegocio("Esa acta está dada de baja.");
-        else if (existente.Archivada) throw new ExcepcionNegocio(ActaArchivada(existente));
-        else acta = existente;
+                Registrar("Acta", acta.IdActa, idSector, "Alta", $"Causa {acta.NroCausa} · acta {acta.NroActa}");
+            }
+            else acta = existente;
 
-        movimiento.IdMovimiento = 0;
-        movimiento.IdActa = acta.IdActa;
-        movimiento.IdSector = idSector;
-        movimiento.Eliminado = false;
-        movimiento.IdUsuarioAlta = Sesion.IdUsuario;
-        movimiento.FechaAlta = DateTime.Now;
-        Guardar(() => Datos.GuardarMovimiento(movimiento));
-        Registrar("Movimiento", movimiento.IdMovimiento, idSector, "Alta", $"Causa {acta.NroCausa}: {movimiento.Detalle}");
+            movimiento.IdMovimiento = 0;
+            movimiento.IdActa = acta.IdActa;
+            movimiento.IdSector = idSector;
+            movimiento.Eliminado = false;
+            movimiento.IdUsuarioAlta = Sesion.IdUsuario;
+            movimiento.FechaAlta = DateTime.Now;
+            Datos.GuardarMovimiento(movimiento);
+            Registrar("Movimiento", movimiento.IdMovimiento, idSector, "Alta", $"Causa {acta.NroCausa}: {movimiento.Detalle}");
+        });
         return Datos.ObtenerMovimiento(movimiento.IdMovimiento);
     }
 
@@ -145,6 +151,7 @@ public class ServicioRegistros : ServicioBase
         var actual = Datos.ObtenerMovimiento(cambios.IdMovimiento) ?? throw new ExcepcionNegocio("El movimiento no existe.");
         Sesion.Exigir(actual.IdSector, Accion.Modificar);
         if (actual.Eliminado) throw new ExcepcionNegocio("El movimiento está dado de baja.");
+        ExigirSinCambiosAjenos(cambios, actual);
         ExigirNoArchivada(actual.IdActa);
         ValidarMovimiento(cambios);
 
@@ -159,8 +166,11 @@ public class ServicioRegistros : ServicioBase
         actual.Observaciones = Limpio(cambios.Observaciones);
         actual.IdUsuarioModif = Sesion.IdUsuario;
         actual.FechaModif = DateTime.Now;
-        Guardar(() => Datos.GuardarMovimiento(actual));
-        Registrar("Movimiento", actual.IdMovimiento, actual.IdSector, "Modificación", $"Causa {actual.NroCausa}: {detalle}");
+        Operacion(() =>
+        {
+            Datos.GuardarMovimiento(actual);
+            Registrar("Movimiento", actual.IdMovimiento, actual.IdSector, "Modificación", $"Causa {actual.NroCausa}: {detalle}");
+        });
     }
 
     // baja logica
@@ -173,8 +183,11 @@ public class ServicioRegistros : ServicioBase
         m.Eliminado = true;
         m.IdUsuarioModif = Sesion.IdUsuario;
         m.FechaModif = DateTime.Now;
-        Guardar(() => Datos.GuardarMovimiento(m));
-        Registrar("Movimiento", m.IdMovimiento, m.IdSector, "Baja", $"Causa {m.NroCausa}: {m.Detalle}" + (Limpio(motivo) is { } x ? $" · Motivo: {x}" : ""));
+        Operacion(() =>
+        {
+            Datos.GuardarMovimiento(m);
+            Registrar("Movimiento", m.IdMovimiento, m.IdSector, "Baja", $"Causa {m.NroCausa}: {m.Detalle}" + (Limpio(motivo) is { } x ? $" · Motivo: {x}" : ""));
+        });
     }
 
     public FichaActa ObtenerFicha(int idActa)
@@ -188,8 +201,10 @@ public class ServicioRegistros : ServicioBase
         // historial y recorridos, solo ven lo que pueden ver segun sus permisos
         var recorrido = todos.Where(m => Sesion.Puede(m.IdSector, Accion.Leer)).ToList();
         var versiones = Datos.ListarVersiones(idActa);
+        // también las correcciones del nombre de la persona (se hacen desde cualquiera de sus actas y valen para todas)
         var historial = Sesion.Filtrar(Datos.ListarHistorial("Acta", idActa)
-            .Concat(recorrido.SelectMany(m => Datos.ListarHistorial("Movimiento", m.IdMovimiento))))
+            .Concat(recorrido.SelectMany(m => Datos.ListarHistorial("Movimiento", m.IdMovimiento)))
+            .Concat(acta.IdPersona is int idPer ? Datos.ListarHistorial("Persona", idPer) : []))
             .OrderByDescending(h => h.Fecha).ThenByDescending(h => h.IdHistorial).ToList();
 
         return new FichaActa
@@ -233,46 +248,58 @@ public class ServicioRegistros : ServicioBase
             throw new ExcepcionNegocio(Sesion.EsAdministrador || movimientos.Any(m => Sesion.Puede(m.IdSector, Accion.Leer))
                 ? Sesion.AccionNoDisponible : Sesion.NoDisponible);
         if (actual.Archivada) throw new ExcepcionNegocio(ActaArchivada(actual));
+        ExigirSinCambiosAjenos(cambios, actual);
         Requerido(motivo, "el motivo del cambio");
         Largo(motivo, 200, "El motivo");
         ValidarActa(cambios);
         ValidarPersona(persona);
 
-        int? idPersona = null;
-        Guardar(() => idPersona = ResolverPersona(persona, actual.IdPersona));
-        string juzgadoNuevo = Datos.ListarJuzgados().FirstOrDefault(j => j.IdJuzgado == cambios.IdJuzgado)?.Nombre;
-        string personaNueva = idPersona == null ? null : Datos.ObtenerPersona(idPersona.Value)?.NombreCompleto;
-        var detalle = new Cambios()
-            .Campo("N° de acta", actual.NroActa, cambios.NroActa.Trim()).Campo("Fecha del acta", actual.FechaActa, cambios.FechaActa.Date)
-            .Campo("Juzgado", actual.Juzgado, juzgadoNuevo).Campo("Persona", actual.Persona, personaNueva)
-            .Campo("Dominio", actual.Dominio, cambios.Dominio)
-            .Campo("Suma reclamada", actual.SumaReclamada, cambios.SumaReclamada).Campo("Gastos administrativos", actual.GastosAdministrativos, cambios.GastosAdministrativos)
-            .Campo("Observaciones", actual.Observaciones, Limpio(cambios.Observaciones));
-        if (!detalle.Hay) throw new ExcepcionNegocio("No hay cambios para guardar.");
-
-        actual.NroActa = cambios.NroActa.Trim();
-        actual.FechaActa = cambios.FechaActa.Date;
-        actual.IdJuzgado = cambios.IdJuzgado;
-        actual.IdPersona = idPersona;
-        actual.Dominio = cambios.Dominio;
-        actual.SumaReclamada = cambios.SumaReclamada;
-        actual.GastosAdministrativos = cambios.GastosAdministrativos;
-        actual.Observaciones = Limpio(cambios.Observaciones);
-        actual.Version++;
-        actual.IdUsuarioModif = Sesion.IdUsuario;
-        actual.FechaModif = DateTime.Now;
-        Guardar(() =>
-        {
-            Datos.GuardarActa(actual);
-            Datos.AgregarVersion(ActaVersion.Desde(actual, actual.Version, motivo.Trim(), Sesion.IdUsuario, actual.FechaModif.Value));
-        });
+        // todo en una transacción: si no hay cambios o algo falla, tampoco queda guardada la persona
         int? sector = movimientos.Select(m => m.IdSector).FirstOrDefault(s => Sesion.Puede(s, Accion.Modificar));
-        Registrar("Acta", actual.IdActa, sector == 0 ? null : sector, "Modificación",
-            $"Versión {actual.Version} · {motivo.Trim()} · {detalle}");
+        if (sector == 0) sector = null;
+        Operacion(() =>
+        {
+            int? idPersona = ResolverPersona(persona, actual.IdPersona, sector);
+            string juzgadoNuevo = Datos.ListarJuzgados().FirstOrDefault(j => j.IdJuzgado == cambios.IdJuzgado)?.Nombre;
+            string personaNueva = idPersona == null ? null : Datos.ObtenerPersona(idPersona.Value)?.NombreCompleto;
+            var detalle = new Cambios()
+                .Campo("N° de acta", actual.NroActa, cambios.NroActa.Trim()).Campo("Fecha del acta", actual.FechaActa, cambios.FechaActa.Date)
+                .Campo("Juzgado", actual.Juzgado, juzgadoNuevo).Campo("Persona", actual.Persona, personaNueva)
+                .Campo("Dominio", actual.Dominio, cambios.Dominio)
+                .Campo("Suma reclamada", actual.SumaReclamada, cambios.SumaReclamada).Campo("Gastos administrativos", actual.GastosAdministrativos, cambios.GastosAdministrativos)
+                .Campo("Observaciones", actual.Observaciones, Limpio(cambios.Observaciones));
+            if (!detalle.Hay) throw new ExcepcionNegocio("No hay cambios para guardar.");
+
+            actual.NroActa = cambios.NroActa.Trim();
+            actual.FechaActa = cambios.FechaActa.Date;
+            actual.IdJuzgado = cambios.IdJuzgado;
+            actual.IdPersona = idPersona;
+            actual.Dominio = cambios.Dominio;
+            actual.SumaReclamada = cambios.SumaReclamada;
+            actual.GastosAdministrativos = cambios.GastosAdministrativos;
+            actual.Observaciones = Limpio(cambios.Observaciones);
+            actual.Version++;
+            actual.IdUsuarioModif = Sesion.IdUsuario;
+            actual.FechaModif = DateTime.Now;
+            Datos.GuardarActa(actual);   // con la revisión que se leyó: si otro la cambió recién, no se guarda
+            Datos.AgregarVersion(ActaVersion.Desde(actual, actual.Version, motivo.Trim(), Sesion.IdUsuario, actual.FechaModif.Value));
+            Registrar("Acta", actual.IdActa, sector, "Modificación",
+                $"Versión {actual.Version} · {motivo.Trim()} · {detalle}");
+        });
     }
 
-    // devuelve el id de la persona
-    private int? ResolverPersona(Persona p, int? idActual = null)
+    /// La persona con ese documento, si ya está cargada (para completar el nombre en los formularios). El documento identifica
+    /// a la persona: el mismo DNI o CUIT es siempre la misma persona, en todas sus actas.
+    public Persona PersonaPorDocumento(string tipoDocumento, string nroDocumento)
+    {
+        var nro = Limpio(nroDocumento);
+        return nro == null || string.IsNullOrEmpty(tipoDocumento) ? null : Datos.BuscarPersonaPorDocumento(tipoDocumento, nro);
+    }
+
+    // Devuelve el id de la persona. El documento la identifica: si ya existe, es esa persona, y si el nombre vino
+    // distinto se corrige (en todas sus actas) y queda en el historial. Sin documento no se puede saber si es la misma:
+    // se usa la del acta si no cambió nada, o se crea una nueva.
+    private int? ResolverPersona(Persona p, int? idActual, int? idSector)
     {
         if (p == null || string.IsNullOrWhiteSpace(p.Apellido)) return null;
         p.Apellido = p.Apellido.Trim();
@@ -289,9 +316,12 @@ public class ServicioRegistros : ServicioBase
             {
                 if (existente.Apellido != p.Apellido || existente.Nombre != p.Nombre)
                 {
+                    string antes = existente.NombreCompleto;
                     existente.Apellido = p.Apellido;
                     existente.Nombre = p.Nombre;
                     Datos.GuardarPersona(existente);
+                    Registrar("Persona", existente.IdPersona, idSector, "Modificación",
+                        $"{existente.TipoDocumento} {existente.NroDocumento}: {antes} → {existente.NombreCompleto} (se corrige en todas sus actas)");
                 }
                 return existente.IdPersona;
             }
@@ -310,6 +340,8 @@ public class ServicioRegistros : ServicioBase
         if (a.Anio < 1990 || a.Anio > DateTime.Today.Year + 1) throw new ExcepcionNegocio("El año del acta no es válido.");
     }
 
+    public const decimal MontoMaximo = 9_999_999_999.99m;
+
     internal static void ValidarActa(Acta a)
     {
         Requerido(a.NroActa, "el N° de acta");
@@ -321,6 +353,9 @@ public class ServicioRegistros : ServicioBase
             throw new ExcepcionNegocio("El dominio va con letras y números, por ejemplo AB123CD o ABC123.");
         if (a.FechaActa.Date > DateTime.Today) throw new ExcepcionNegocio("La fecha del acta no puede ser futura.");
         if (a.SumaReclamada < 0 || a.GastosAdministrativos < 0) throw new ExcepcionNegocio("Los montos no pueden ser negativos.");
+        // la base guarda montos de hasta 10 cifras enteras con 2 decimales (DECIMAL(12,2))
+        if (a.SumaReclamada > MontoMaximo || a.GastosAdministrativos > MontoMaximo)
+            throw new ExcepcionNegocio($"Los montos no pueden pasar de {MontoMaximo.ToString("N2", Formatos.Cultura)}.");
     }
 
     internal static void ValidarPersona(Persona p)
@@ -356,6 +391,10 @@ public class ServicioRegistros : ServicioBase
         var a = Datos.ObtenerActa(idActa);
         if (a?.Archivada == true) throw new ExcepcionNegocio(ActaArchivada(a));
     }
+
+    // un registro dado de baja ya no se ve ni se modifica: queda solo para el historial
+    private static T Vigente<T>(T registro, string que) where T : RegistroAuditado
+        => registro is { Eliminado: false } ? registro : throw new ExcepcionNegocio($"{que} no existe o fue dado de baja.");
 
     // el sector tiene que existir para la cuenta, tener el permiso y ser del tipo pedido
     private Sector SectorDe(int idSector, TipoSector tipo, Accion accion)
@@ -393,8 +432,11 @@ public class ServicioRegistros : ServicioBase
         acta.FechaArchivo = fecha.Date;
         acta.IdUsuarioModif = Sesion.IdUsuario;
         acta.FechaModif = DateTime.Now;
-        Guardar(() => Datos.GuardarActa(acta));
-        Registrar("Acta", acta.IdActa, idSector, "Archivo", $"Causa {acta.NroCausa} · lote {lote.NroLote} · {acta.TextoMotivoArchivo} · {fecha:dd/MM/yyyy}");
+        Operacion(() =>
+        {
+            Datos.GuardarActa(acta);
+            Registrar("Acta", acta.IdActa, idSector, "Archivo", $"Causa {acta.NroCausa} · lote {lote.NroLote} · {acta.TextoMotivoArchivo} · {fecha:dd/MM/yyyy}");
+        });
         return acta;
     }
 
@@ -410,9 +452,12 @@ public class ServicioRegistros : ServicioBase
         acta.FechaArchivo = null;
         acta.IdUsuarioModif = Sesion.IdUsuario;
         acta.FechaModif = DateTime.Now;
-        Guardar(() => Datos.GuardarActa(acta));
-        Registrar("Acta", acta.IdActa, idSector, "Modificación",
-            $"Causa {acta.NroCausa} · se sacó del lote {lote}" + (Limpio(motivo) is { } x ? $" · Motivo: {x}" : ""));
+        Operacion(() =>
+        {
+            Datos.GuardarActa(acta);
+            Registrar("Acta", acta.IdActa, idSector, "Modificación",
+                $"Causa {acta.NroCausa} · se sacó del lote {lote}" + (Limpio(motivo) is { } x ? $" · Motivo: {x}" : ""));
+        });
     }
 
     // apremio
@@ -439,34 +484,41 @@ public class ServicioRegistros : ServicioBase
         acta.NroApremio = nro;
         acta.IdUsuarioModif = Sesion.IdUsuario;
         acta.FechaModif = DateTime.Now;
-        Guardar(() => Datos.GuardarActa(acta));
-        Registrar("Acta", acta.IdActa, apremio.IdSector, "Modificación", $"Causa {acta.NroCausa} · {detalle}");
+        Operacion(() =>
+        {
+            Datos.GuardarActa(acta);
+            Registrar("Acta", acta.IdActa, apremio.IdSector, "Modificación", $"Causa {acta.NroCausa} · {detalle}");
+        });
     }
 
     // reclamos
 
     public Reclamo ObtenerReclamo(int idSector, int idReclamo)
     {
-        Sesion.Exigir(idSector, Accion.Leer);
-        return Datos.ObtenerReclamo(idReclamo) ?? throw new ExcepcionNegocio("El reclamo no existe.");
+        SectorDe(idSector, TipoSector.Reclamos, Accion.Leer);
+        return Vigente(Datos.ObtenerReclamo(idReclamo), "El reclamo");
     }
 
     public void CargarReclamo(int idSector, Reclamo r)
     {
-        Sesion.Exigir(idSector, Accion.Cargar);
+        SectorDe(idSector, TipoSector.Reclamos, Accion.Cargar);
         ValidarReclamo(r);
         r.IdReclamo = 0;
         r.Eliminado = false;
         r.IdUsuarioAlta = Sesion.IdUsuario;
         r.FechaAlta = DateTime.Now;
-        Guardar(() => Datos.GuardarReclamo(r));
-        Registrar("Reclamo", r.IdReclamo, idSector, "Alta", $"Caso {r.NroCaso} · {r.Ubicacion}");
+        Operacion(() =>
+        {
+            Datos.GuardarReclamo(r);
+            Registrar("Reclamo", r.IdReclamo, idSector, "Alta", $"Caso {r.NroCaso} · {r.Ubicacion}");
+        });
     }
 
     public void ModificarReclamo(int idSector, Reclamo cambios)
     {
-        Sesion.Exigir(idSector, Accion.Modificar);
-        var actual = Datos.ObtenerReclamo(cambios.IdReclamo) ?? throw new ExcepcionNegocio("El reclamo no existe.");
+        SectorDe(idSector, TipoSector.Reclamos, Accion.Modificar);
+        var actual = Vigente(Datos.ObtenerReclamo(cambios.IdReclamo), "El reclamo");
+        ExigirSinCambiosAjenos(cambios, actual);
         ValidarReclamo(cambios);
         var detalle = new Cambios()
             .Campo("N° de caso", actual.NroCaso, cambios.NroCaso).Campo("Fecha de ingreso", actual.Fecha, cambios.Fecha)
@@ -485,19 +537,26 @@ public class ServicioRegistros : ServicioBase
         cambios.FechaAlta = actual.FechaAlta;
         cambios.IdUsuarioModif = Sesion.IdUsuario;
         cambios.FechaModif = DateTime.Now;
-        Guardar(() => Datos.GuardarReclamo(cambios));
-        Registrar("Reclamo", cambios.IdReclamo, idSector, "Modificación", $"Caso {cambios.NroCaso}: {detalle}");
+        Operacion(() =>
+        {
+            Datos.GuardarReclamo(cambios);
+            Registrar("Reclamo", cambios.IdReclamo, idSector, "Modificación", $"Caso {cambios.NroCaso}: {detalle}");
+        });
     }
 
     public void EliminarReclamo(int idSector, int idReclamo, string motivo)
     {
-        Sesion.Exigir(idSector, Accion.Eliminar);
+        SectorDe(idSector, TipoSector.Reclamos, Accion.Eliminar);
         var r = Datos.ObtenerReclamo(idReclamo) ?? throw new ExcepcionNegocio("El reclamo no existe.");
+        if (r.Eliminado) return;   // ya estaba dado de baja
         r.Eliminado = true;
         r.IdUsuarioModif = Sesion.IdUsuario;
         r.FechaModif = DateTime.Now;
-        Guardar(() => Datos.GuardarReclamo(r));
-        Registrar("Reclamo", r.IdReclamo, idSector, "Baja", $"Caso {r.NroCaso}" + (Limpio(motivo) is { } x ? $" · Motivo: {x}" : ""));
+        Operacion(() =>
+        {
+            Datos.GuardarReclamo(r);
+            Registrar("Reclamo", r.IdReclamo, idSector, "Baja", $"Caso {r.NroCaso}" + (Limpio(motivo) is { } x ? $" · Motivo: {x}" : ""));
+        });
     }
 
     internal static void ValidarReclamo(Reclamo r)
@@ -544,26 +603,30 @@ public class ServicioRegistros : ServicioBase
 
     public Lote ObtenerLote(int idSector, int idLote)
     {
-        Sesion.Exigir(idSector, Accion.Leer);
-        return Datos.ObtenerLote(idLote) ?? throw new ExcepcionNegocio("El lote no existe.");
+        SectorDe(idSector, TipoSector.Lotes, Accion.Leer);
+        return Vigente(Datos.ObtenerLote(idLote), "El lote");
     }
 
     public void CargarLote(int idSector, Lote l)
     {
-        Sesion.Exigir(idSector, Accion.Cargar);
+        SectorDe(idSector, TipoSector.Lotes, Accion.Cargar);
         ValidarLote(l);
         l.IdLote = 0;
         l.Eliminado = false;
         l.IdUsuarioAlta = Sesion.IdUsuario;
         l.FechaAlta = DateTime.Now;
-        Guardar(() => Datos.GuardarLote(l));
-        Registrar("Lote", l.IdLote, idSector, "Alta", $"Lote {l.NroLote} · {l.Total} actas");
+        Operacion(() =>
+        {
+            Datos.GuardarLote(l);
+            Registrar("Lote", l.IdLote, idSector, "Alta", $"Lote {l.NroLote} · {l.Total} actas");
+        });
     }
 
     public void ModificarLote(int idSector, Lote cambios)
     {
-        Sesion.Exigir(idSector, Accion.Modificar);
-        var actual = Datos.ObtenerLote(cambios.IdLote) ?? throw new ExcepcionNegocio("El lote no existe.");
+        SectorDe(idSector, TipoSector.Lotes, Accion.Modificar);
+        var actual = Vigente(Datos.ObtenerLote(cambios.IdLote), "El lote");
+        ExigirSinCambiosAjenos(cambios, actual);
         ValidarLote(cambios);
         var detalle = new Cambios()
             .Campo("N° de lote", actual.NroLote, cambios.NroLote).Campo("Fecha", actual.Fecha, cambios.Fecha)
@@ -575,19 +638,26 @@ public class ServicioRegistros : ServicioBase
         cambios.FechaAlta = actual.FechaAlta;
         cambios.IdUsuarioModif = Sesion.IdUsuario;
         cambios.FechaModif = DateTime.Now;
-        Guardar(() => Datos.GuardarLote(cambios));
-        Registrar("Lote", cambios.IdLote, idSector, "Modificación", $"Lote {cambios.NroLote}: {detalle}");
+        Operacion(() =>
+        {
+            Datos.GuardarLote(cambios);
+            Registrar("Lote", cambios.IdLote, idSector, "Modificación", $"Lote {cambios.NroLote}: {detalle}");
+        });
     }
 
     public void EliminarLote(int idSector, int idLote, string motivo)
     {
-        Sesion.Exigir(idSector, Accion.Eliminar);
+        SectorDe(idSector, TipoSector.Lotes, Accion.Eliminar);
         var l = Datos.ObtenerLote(idLote) ?? throw new ExcepcionNegocio("El lote no existe.");
+        if (l.Eliminado) return;   // ya estaba dado de baja
         l.Eliminado = true;
         l.IdUsuarioModif = Sesion.IdUsuario;
         l.FechaModif = DateTime.Now;
-        Guardar(() => Datos.GuardarLote(l));
-        Registrar("Lote", l.IdLote, idSector, "Baja", $"Lote {l.NroLote}" + (Limpio(motivo) is { } x ? $" · Motivo: {x}" : ""));
+        Operacion(() =>
+        {
+            Datos.GuardarLote(l);
+            Registrar("Lote", l.IdLote, idSector, "Baja", $"Lote {l.NroLote}" + (Limpio(motivo) is { } x ? $" · Motivo: {x}" : ""));
+        });
     }
 
     internal static void ValidarLote(Lote l)

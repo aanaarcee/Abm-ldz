@@ -93,7 +93,7 @@ internal class FormReclamo : FormularioDatos
     {
         var r = new Reclamo
         {
-            IdReclamo = _existente?.IdReclamo ?? 0, NroCaso = _caso.Text, Fecha = _fecha.Value.Date,
+            IdReclamo = _existente?.IdReclamo ?? 0, Revision = _existente?.Revision ?? 0, NroCaso = _caso.Text, Fecha = _fecha.Value.Date,
             Origen = ((Opcion<OrigenReclamo?>)_origen.SelectedItem).Valor, Categoria = ((Opcion<CategoriaReclamo?>)_categoria.SelectedItem).Valor, Estado = ((Opcion<EstadoReclamo>)_estado.SelectedItem).Valor,
             Ubicacion = _ubicacion.Text, Entrecalles = _entrecalles.Text, Delegacion = _delegacion.Text,
             Vehiculo = _vehiculo.Text, Denunciante = _denunciante.Text,
@@ -155,7 +155,7 @@ internal class FormLote : FormularioDatos
     {
         var l = new Lote
         {
-            IdLote = _existente?.IdLote ?? 0, NroLote = _nro.Text, Fecha = _fecha.Value.Date, CantTransito = (int)_transito.Value,
+            IdLote = _existente?.IdLote ?? 0, Revision = _existente?.Revision ?? 0, NroLote = _nro.Text, Fecha = _fecha.Value.Date, CantTransito = (int)_transito.Value,
             CantCompetencia = (int)_competencia.Value, CantPrescriptas = (int)_prescriptas.Value, Observaciones = _obs.Text
         };
         if (_existente == null) _servicio.CargarLote(_sector.IdSector, l);

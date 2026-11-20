@@ -1,3 +1,4 @@
+using Oficina.Entidades;
 using Oficina.Negocio;
 
 namespace Oficina.UI.Formularios;
@@ -112,6 +113,35 @@ internal abstract class FormularioDatos : Form
         for (int i = 0; i < c.Items.Count; i++)
             if (c.Items[i] is T t && condicion(t)) { c.SelectedIndex = i; return; }
         c.SelectedIndex = c.Items.Count > 0 ? 0 : -1;
+    }
+
+    // ---------- Persona: el documento la identifica ----------
+
+    /// Al salir del campo documento, si esa persona ya está cargada, se completan su apellido y nombre
+    protected static void CompletarPorDocumento(ServicioRegistros servicio, ComboBox tipo, TextBox documento, TextBox apellido, TextBox nombre)
+        => documento.Leave += (_, _) =>
+        {
+            // solo si se escribió un documento: pasar por el campo sin tocarlo no pisa un nombre que se estaba corrigiendo
+            if (!documento.Enabled || !documento.Modified) return;
+            documento.Modified = false;
+            var p = servicio.PersonaPorDocumento(tipo.SelectedItem as string, documento.Text);
+            if (p == null) return;
+            apellido.Text = p.Apellido;
+            nombre.Text = p.Nombre;
+        };
+
+    /// Antes de guardar: si el documento ya es de una persona con otro nombre, se pregunta. Seguir corrige el nombre
+    /// en todas sus actas; si el documento estaba mal escrito, se elige No y se corrige. Devuelve falso si no hay que guardar.
+    protected static bool ConfirmarPersona(ServicioRegistros servicio, Persona p)
+    {
+        if (string.IsNullOrWhiteSpace(p.Apellido)) return true;
+        var ya = servicio.PersonaPorDocumento(p.TipoDocumento, p.NroDocumento);
+        string apellido = p.Apellido.Trim(), nombre = string.IsNullOrWhiteSpace(p.Nombre) ? null : p.Nombre.Trim();
+        if (ya == null || (ya.Apellido == apellido && ya.Nombre == nombre)) return true;
+        string nuevo = new Persona { Apellido = apellido, Nombre = nombre }.NombreCompleto;
+        return Dialogo.Confirmar($"El {ya.TipoDocumento} {ya.NroDocumento} ya está cargado como «{ya.NombreCompleto}».\n\n" +
+                                 $"El documento identifica a la persona: si sigue, el nombre se corrige a «{nuevo}» en todas sus actas " +
+                                 "y queda anotado en el historial.\n\nSi el documento está mal escrito, elija No y corríjalo.\n\n¿Corregir el nombre?");
     }
 
     protected static decimal? LeerMonto(TextBox caja, string campo)

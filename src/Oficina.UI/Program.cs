@@ -41,15 +41,19 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            var r = MessageBox.Show($"No se pudo conectar con la base de datos ({app.Origen}).\n\n{ex.Message}\n\n" +
-                                    "Si trabaja desde afuera de la oficina, revise que la VPN (Tailscale) esté conectada.\n\n" +
-                                    "¿Abrir en modo prueba? Los datos quedan en memoria y se pierden al cerrar.",
-                                    "Registros de Oficina", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-            if (r != DialogResult.Yes) return;
-            app = Aplicacion.EnMemoria();
-            app.Preparar();
+            // No se ofrece seguir "en memoria": alguien podría cargar el día entero y perderlo al cerrar.
+            // El modo prueba existe, pero solo a propósito (--memoria).
+            MessageBox.Show($"No se pudo conectar con la base de datos ({app.Origen}).\n\n{ex.Message}\n\n" +
+                            "Revise que la computadora tenga internet y, si trabaja desde afuera de la oficina, que la VPN (Tailscale) esté conectada. " +
+                            "Si el problema sigue, avise a quien administra el sistema.\n\nLa aplicación se va a cerrar: no se cargó nada.",
+                            "Registros de Oficina", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
         }
         finally { Cursor.Current = Cursors.Default; }
+
+        if (app.EsPrueba)
+            MessageBox.Show("Modo prueba: los datos son de ejemplo, quedan en memoria y se pierden al cerrar la aplicación.\n\nNo cargue datos reales.",
+                            "Registros de Oficina", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
         while (true)
         {

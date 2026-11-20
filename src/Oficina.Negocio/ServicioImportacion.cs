@@ -234,6 +234,15 @@ public class ServicioImportacion : ServicioBase
             ServicioRegistros.ValidarPersona(persona);
             if (c.Vistos.Add("acta|" + claveActa)) { c.ActasNuevas++; fila.Aviso = "Acta nueva"; }
             else fila.Aviso = "Otro movimiento de un acta nueva del archivo";
+
+            // el documento identifica a la persona: si ya está cargada con otro nombre, una planilla no la renombra
+            if (persona?.NroDocumento is { } doc && Datos.BuscarPersonaPorDocumento(persona.TipoDocumento, doc) is { } yaCargada
+                && (!TextoBusqueda.Iguales(yaCargada.Apellido, persona.Apellido?.Trim()) || !TextoBusqueda.Iguales(yaCargada.Nombre ?? "", persona.Nombre?.Trim() ?? "")))
+            {
+                fila.Aviso += $" · El {yaCargada.TipoDocumento} {doc} ya está cargado como «{yaCargada.NombreCompleto}»: se usa ese nombre";
+                persona.Apellido = yaCargada.Apellido;
+                persona.Nombre = yaCargada.Nombre;
+            }
         }
         else
         {
@@ -486,7 +495,12 @@ public class ServicioImportacion : ServicioBase
 
     private static int? Entero(object o, string campo)
     {
-        if (o is double d) return d == Math.Floor(d) ? (int)d : throw new ExcepcionNegocio($"{campo}: «{d}» tiene que ser un número entero.");
+        if (o is double d)
+        {
+            if (d != Math.Floor(d)) throw new ExcepcionNegocio($"{campo}: «{d}» tiene que ser un número entero.");
+            if (d < int.MinValue || d > int.MaxValue) throw new ExcepcionNegocio($"{campo}: «{d}» es demasiado grande.");
+            return (int)d;
+        }
         string t = Texto(o);
         if (t == null) return null;
         return int.TryParse(t, NumberStyles.Integer, CultureInfo.InvariantCulture, out int n) ? n
@@ -495,7 +509,10 @@ public class ServicioImportacion : ServicioBase
 
     private static decimal? Monto(object o, string campo)
     {
-        if (o is double d) return Math.Round((decimal)d, 2);
+        // un número enorme de Excel no entra en decimal (y tampoco en la base): error de esa fila, no de todo el archivo
+        if (o is double d)
+            return Math.Abs(d) <= (double)ServicioRegistros.MontoMaximo ? Math.Round((decimal)d, 2)
+                : throw new ExcepcionNegocio($"{campo}: «{d:N0}» es demasiado grande (el máximo es {ServicioRegistros.MontoMaximo.ToString("N2", Formatos.Cultura)}).");
         string t = Texto(o)?.Replace("$", "").Replace(" ", "");
         if (string.IsNullOrEmpty(t)) return null;
         decimal r;
@@ -505,7 +522,10 @@ public class ServicioImportacion : ServicioBase
         else if (System.Text.RegularExpressions.Regex.IsMatch(t, @"^-?\d{1,3}(\.\d{3})+$"))                                         
             ok = decimal.TryParse(t, NumberStyles.Number, Formatos.Cultura, out r);
         else ok = decimal.TryParse(t, NumberStyles.Number, CultureInfo.InvariantCulture, out r);                                    
-        return ok ? Math.Round(r, 2) : throw new ExcepcionNegocio($"{campo}: «{t}» no es un monto válido.");
+        if (!ok) throw new ExcepcionNegocio($"{campo}: «{t}» no es un monto válido.");
+        if (Math.Abs(r) > ServicioRegistros.MontoMaximo)
+            throw new ExcepcionNegocio($"{campo}: «{t}» es demasiado grande (el máximo es {ServicioRegistros.MontoMaximo.ToString("N2", Formatos.Cultura)}).");
+        return Math.Round(r, 2);
     }
 
     private static bool Booleano(object o, string campo)

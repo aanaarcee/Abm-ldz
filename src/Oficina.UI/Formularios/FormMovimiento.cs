@@ -81,6 +81,7 @@ internal class FormMovimiento : FormularioDatos
         _gastos = Campo("Gastos administrativos", Texto(16));
         _obsActa = Campo("Observaciones del acta", Texto(500, varias: true));
 
+        CompletarPorDocumento(_servicio, _tipoDoc, _documento, _apellido, _nombre);
         _causa.Leave += (_, _) => BuscarActa();
         _reparticion.SelectedIndexChanged += (_, _) => BuscarActa();
         _anio.ValueChanged += (_, _) => BuscarActa();
@@ -124,7 +125,7 @@ internal class FormMovimiento : FormularioDatos
     {
         var mov = new Movimiento
         {
-            IdMovimiento = _existente?.IdMovimiento ?? 0, Fecha = _fecha.Value.Date, Detalle = _detalle.Text,
+            IdMovimiento = _existente?.IdMovimiento ?? 0, Revision = _existente?.Revision ?? 0, Fecha = _fecha.Value.Date, Detalle = _detalle.Text,
             Remito = _remito.Text, Observaciones = _observaciones.Text
         };
         if (_existente != null)
@@ -140,6 +141,7 @@ internal class FormMovimiento : FormularioDatos
             SumaReclamada = LeerMonto(_sumaReclamada, "Suma reclamada"), GastosAdministrativos = LeerMonto(_gastos, "Gastos administrativos"), Observaciones = _obsActa.Text
         };
         var persona = new Persona { Apellido = _apellido.Text, Nombre = _nombre.Text, TipoDocumento = (string)_tipoDoc.SelectedItem, NroDocumento = _documento.Text };
+        if (_actaEncontrada == null && !ConfirmarPersona(_servicio, persona)) return false;
         _servicio.CargarMovimiento(_sector.IdSector, acta, persona, mov);
         return true;
     }

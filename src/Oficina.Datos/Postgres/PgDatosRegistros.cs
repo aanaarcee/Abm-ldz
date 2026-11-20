@@ -21,6 +21,7 @@ public class PgDatosRegistros : ConexionPg, IDatosRegistros
         x.FechaAlta = r.Fecha("FechaAlta");
         x.IdUsuarioModif = r.EnteroN("IdUsuarioModif");
         x.FechaModif = r.FechaN("FechaModif");
+        x.Revision = Convert.ToUInt32(r["Revision"]);   // xmin de la fila: cambia cada vez que alguien la guarda
     }
 
     private static NpgsqlParameter[] ParametrosAuditoria(RegistroAuditado x) =>
@@ -81,7 +82,7 @@ public class PgDatosRegistros : ConexionPg, IDatosRegistros
     // actas
 
     private const string SelectActa = $"""
-        SELECT a.*, CONCAT(r.Codigo, ' · ', r.Nombre) AS NombreReparticion, j.Nombre AS NombreJuzgado, {NombrePersona} AS NombrePersona, p.NroDocumento AS Documento
+        SELECT a.*, a.xmin AS Revision, CONCAT(r.Codigo, ' · ', r.Nombre) AS NombreReparticion, j.Nombre AS NombreJuzgado, {NombrePersona} AS NombrePersona, p.NroDocumento AS Documento
         FROM Acta a
         JOIN Reparticion r ON r.IdReparticion = a.IdReparticion
         LEFT JOIN Juzgado j ON j.IdJuzgado = a.IdJuzgado
@@ -128,13 +129,13 @@ public class PgDatosRegistros : ConexionPg, IDatosRegistros
                         @Version, @Lote, @MotivoArchivo, @FechaArchivo, @Apremio, @Eliminado, @UsuarioAlta, @FechaAlta, @UsuarioModif, @FechaModif)
                 """, ps);
         else
-            Ejecutar("""
+            Actualizar("""
                 UPDATE Acta SET NroCausa = @Causa, IdReparticion = @Rep, Anio = @Anio, NroActa = @NroActa, IdJuzgado = @Juzgado,
                     IdPersona = @Persona, Dominio = @Dominio, FechaActa = @FechaActa, SumaReclamada = @SumaReclamada, GastosAdministrativos = @GastosAdministrativos, Observaciones = @Obs, Version = @Version,
                     IdLote = @Lote, MotivoArchivo = @MotivoArchivo, FechaArchivo = @FechaArchivo, NroApremio = @Apremio,
                     Eliminado = @Eliminado, IdUsuarioModif = @UsuarioModif, FechaModif = @FechaModif
                 WHERE IdActa = @Id
-                """, [.. ps, P("@Id", acta.IdActa)]);
+                """, acta.Revision, [.. ps, P("@Id", acta.IdActa)]);
     }
 
     public List<ActaVersion> ListarVersiones(int idActa) => Leer($"""
@@ -166,7 +167,7 @@ public class PgDatosRegistros : ConexionPg, IDatosRegistros
     // movimientos
 
     private const string SelectMovimiento = $"""
-        SELECT m.*, s.Nombre AS NombreSector, a.NroCausa, CONCAT(r.Codigo, ' · ', r.Nombre) AS NombreReparticion, a.Anio, a.NroActa,
+        SELECT m.*, m.xmin AS Revision, s.Nombre AS NombreSector, a.NroCausa, CONCAT(r.Codigo, ' · ', r.Nombre) AS NombreReparticion, a.Anio, a.NroActa,
                {NombrePersona} AS NombrePersona, p.NroDocumento AS Documento, a.NroApremio, a.SumaReclamada, a.GastosAdministrativos
         FROM Movimiento m
         JOIN Sector s      ON s.IdSector = m.IdSector
@@ -211,11 +212,11 @@ public class PgDatosRegistros : ConexionPg, IDatosRegistros
                 VALUES (@Acta, @Sector, @Fecha, @Detalle, @Remito, @Obs, @Eliminado, @UsuarioAlta, @FechaAlta, @UsuarioModif, @FechaModif)
                 """, ps);
         else
-            Ejecutar("""
+            Actualizar("""
                 UPDATE Movimiento SET IdActa = @Acta, IdSector = @Sector, Fecha = @Fecha, Detalle = @Detalle, Remito = @Remito,
                     Observaciones = @Obs, Eliminado = @Eliminado, IdUsuarioModif = @UsuarioModif, FechaModif = @FechaModif
                 WHERE IdMovimiento = @Id
-                """, [.. ps, P("@Id", m.IdMovimiento)]);
+                """, m.Revision, [.. ps, P("@Id", m.IdMovimiento)]);
     }
 
     public Dictionary<int, int> ContarMovimientosPorSector() => Leer("""
@@ -241,9 +242,9 @@ public class PgDatosRegistros : ConexionPg, IDatosRegistros
         return x;
     }
 
-    public Reclamo ObtenerReclamo(int idReclamo) => LeerUno("SELECT * FROM Reclamo WHERE IdReclamo = @Id", MapReclamo, P("@Id", idReclamo));
+    public Reclamo ObtenerReclamo(int idReclamo) => LeerUno("SELECT *, xmin AS Revision FROM Reclamo WHERE IdReclamo = @Id", MapReclamo, P("@Id", idReclamo));
 
-    public List<Reclamo> ListarReclamos() => Leer("SELECT * FROM Reclamo WHERE Eliminado = false ORDER BY Fecha DESC, IdReclamo DESC", MapReclamo);
+    public List<Reclamo> ListarReclamos() => Leer("SELECT *, xmin AS Revision FROM Reclamo WHERE Eliminado = false ORDER BY Fecha DESC, IdReclamo DESC", MapReclamo);
 
     public void GuardarReclamo(Reclamo x)
     {
@@ -265,14 +266,14 @@ public class PgDatosRegistros : ConexionPg, IDatosRegistros
                         @Eliminado, @UsuarioAlta, @FechaAlta, @UsuarioModif, @FechaModif)
                 """, ps);
         else
-            Ejecutar("""
+            Actualizar("""
                 UPDATE Reclamo SET NroCaso = @Caso, Fecha = @Fecha, Origen = @Origen, Categoria = @Categoria, Estado = @Estado, Ubicacion = @Ubicacion,
                     Entrecalles = @Entrecalles, Delegacion = @Delegacion, Vehiculo = @Vehiculo, Denunciante = @Denunciante,
                     Verificado = @Verificado, FechaVerificacion = @FechaVerif, VerificadoPor = @VerifPor, NroActaInfraccion = @ActaInfr,
                     FechaNotificacion = @FechaNotif, Observaciones = @Obs, Eliminado = @Eliminado,
                     IdUsuarioModif = @UsuarioModif, FechaModif = @FechaModif
                 WHERE IdReclamo = @Id
-                """, [.. ps, P("@Id", x.IdReclamo)]);
+                """, x.Revision, [.. ps, P("@Id", x.IdReclamo)]);
     }
 
     // lotes
@@ -288,9 +289,9 @@ public class PgDatosRegistros : ConexionPg, IDatosRegistros
         return x;
     }
 
-    public Lote ObtenerLote(int idLote) => LeerUno("SELECT * FROM Lote WHERE IdLote = @Id", MapLote, P("@Id", idLote));
+    public Lote ObtenerLote(int idLote) => LeerUno("SELECT *, xmin AS Revision FROM Lote WHERE IdLote = @Id", MapLote, P("@Id", idLote));
 
-    public List<Lote> ListarLotes() => Leer("SELECT * FROM Lote WHERE Eliminado = false ORDER BY Fecha DESC, IdLote DESC", MapLote);
+    public List<Lote> ListarLotes() => Leer("SELECT *, xmin AS Revision FROM Lote WHERE Eliminado = false ORDER BY Fecha DESC, IdLote DESC", MapLote);
 
     public List<Acta> ListarActasDeLote(int idLote) =>
         Leer(SelectActa + " WHERE a.IdLote = @Lote ORDER BY a.FechaArchivo DESC, a.IdActa DESC", MapActa, P("@Lote", idLote));
@@ -309,11 +310,11 @@ public class PgDatosRegistros : ConexionPg, IDatosRegistros
                 VALUES (@Nro, @Fecha, @Transito, @Competencia, @Prescriptas, @Obs, @Eliminado, @UsuarioAlta, @FechaAlta, @UsuarioModif, @FechaModif)
                 """, ps);
         else
-            Ejecutar("""
+            Actualizar("""
                 UPDATE Lote SET NroLote = @Nro, Fecha = @Fecha, CantTransito = @Transito, CantCompetencia = @Competencia,
                     CantPrescriptas = @Prescriptas, Observaciones = @Obs, Eliminado = @Eliminado, IdUsuarioModif = @UsuarioModif, FechaModif = @FechaModif
                 WHERE IdLote = @Id
-                """, [.. ps, P("@Id", x.IdLote)]);
+                """, x.Revision, [.. ps, P("@Id", x.IdLote)]);
     }
 
     // historial

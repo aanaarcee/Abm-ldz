@@ -9,4 +9,5 @@ TestResults/
 
 # Configuración local (cada uno con su cadena de conexión)
 *.local.json
-conexion.local.txt
+# conexion.local.txt (la de todos los días) y conexion.admin.local.txt (la del superusuario, para migraciones): tienen contraseñas
+*.local.txt

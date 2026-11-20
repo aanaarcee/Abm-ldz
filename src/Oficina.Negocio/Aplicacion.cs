@@ -16,6 +16,8 @@ public class Aplicacion
     private readonly bool _cargarEjemplo;
 
     public string Origen { get; }
+    // modo prueba (--memoria): nada se guarda, la interfaz lo avisa siempre
+    public bool EsPrueba => _seguridad is DatosEnMemoria;
     // verdadero si en Preparar() se creó la base porque no existía
     public bool BaseCreada { get; private set; }
 

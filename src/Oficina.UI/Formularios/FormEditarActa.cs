@@ -48,16 +48,18 @@ internal class FormEditarActa : FormularioDatos
         _sumaReclamada.Text = Monto(acta.SumaReclamada);
         _gastos.Text = Monto(acta.GastosAdministrativos);
         _obs.Text = acta.Observaciones;
+        CompletarPorDocumento(servicio, _tipoDoc, _documento, _apellido, _nombre);
     }
 
     protected override bool Guardar()
     {
         var cambios = new Acta
         {
-            IdActa = _acta.IdActa, NroActa = _nroActa.Text, FechaActa = _fechaActa.Value.Date, IdJuzgado = (_juzgado.SelectedItem as Juzgado)?.IdJuzgado,
+            IdActa = _acta.IdActa, Revision = _acta.Revision, NroActa = _nroActa.Text, FechaActa = _fechaActa.Value.Date, IdJuzgado = (_juzgado.SelectedItem as Juzgado)?.IdJuzgado,
             Dominio = _dominio.Text, SumaReclamada = LeerMonto(_sumaReclamada, "Suma reclamada"), GastosAdministrativos = LeerMonto(_gastos, "Gastos administrativos"), Observaciones = _obs.Text
         };
         var persona = new Persona { Apellido = _apellido.Text, Nombre = _nombre.Text, TipoDocumento = (string)_tipoDoc.SelectedItem, NroDocumento = _documento.Text };
+        if (!ConfirmarPersona(_servicio, persona)) return false;
         _servicio.ModificarActa(cambios, persona, _motivo.Text);
         return true;
     }

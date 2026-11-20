@@ -1,6 +1,7 @@
 using System.Data;
 using System.Text.RegularExpressions;
 using Npgsql;
+using Oficina.Datos;
 
 namespace Oficina.Datos.Postgres;
 
@@ -8,6 +9,10 @@ namespace Oficina.Datos.Postgres;
 public abstract class ConexionPg
 {
     private readonly string _cadena;
+
+    // transacción en curso (la de EnTransaccion), propia de cada hilo: mientras existe, todo usa esa conexión
+    private sealed record Ambito(NpgsqlConnection Cn, NpgsqlTransaction Tx);
+    private readonly AsyncLocal<Ambito> _ambito = new();
 
     protected ConexionPg(string cadenaConexion) => _cadena = cadenaConexion;
 
@@ -18,33 +23,64 @@ public abstract class ConexionPg
         return cn;
     }
 
+    // Ejecuta varias escrituras como una sola: se guardan todas o ninguna (si algo falla, se deshace todo).
+    // Si ya hay una transacción en curso, se suma a esa.
+    public void EnTransaccion(Action accion)
+    {
+        if (_ambito.Value != null) { accion(); return; }
+        using var cn = Abrir();
+        using var tx = cn.BeginTransaction();
+        _ambito.Value = new Ambito(cn, tx);
+        try
+        {
+            accion();
+            tx.Commit();
+        }
+        finally { _ambito.Value = null; }   // sin Commit, al cerrarse la transacción se deshace
+    }
+
+    // usa la conexión de la transacción en curso, o abre una para este comando solo
+    private T ConConexion<T>(Func<NpgsqlConnection, NpgsqlTransaction, T> usar)
+    {
+        if (_ambito.Value is { } a) return usar(a.Cn, a.Tx);
+        using var cn = Abrir();
+        return usar(cn, null);
+    }
+
     protected static NpgsqlParameter P(string nombre, object valor) => new(nombre, valor ?? DBNull.Value);
 
-    protected List<T> Leer<T>(string sql, Func<NpgsqlDataReader, T> mapear, params NpgsqlParameter[] parametros)
+    protected List<T> Leer<T>(string sql, Func<NpgsqlDataReader, T> mapear, params NpgsqlParameter[] parametros) => ConConexion((cn, tx) =>
     {
-        using var cn = Abrir();
-        using var cmd = Comando(cn, null, sql, parametros);
+        using var cmd = Comando(cn, tx, sql, parametros);
         using var r = cmd.ExecuteReader();
         var lista = new List<T>();
         while (r.Read()) lista.Add(mapear(r));
         return lista;
-    }
+    });
 
     protected T LeerUno<T>(string sql, Func<NpgsqlDataReader, T> mapear, params NpgsqlParameter[] parametros) where T : class
         => Leer(sql, mapear, parametros).FirstOrDefault();
 
-    protected object Escalar(string sql, params NpgsqlParameter[] parametros)
+    protected object Escalar(string sql, params NpgsqlParameter[] parametros) => ConConexion((cn, tx) =>
     {
-        using var cn = Abrir();
-        using var cmd = Comando(cn, null, sql, parametros);
+        using var cmd = Comando(cn, tx, sql, parametros);
         return Traducir(() => cmd.ExecuteScalar());
-    }
+    });
 
-    protected int Ejecutar(string sql, params NpgsqlParameter[] parametros)
+    protected int Ejecutar(string sql, params NpgsqlParameter[] parametros) => ConConexion((cn, tx) =>
     {
-        using var cn = Abrir();
-        using var cmd = Comando(cn, null, sql, parametros);
+        using var cmd = Comando(cn, tx, sql, parametros);
         return Traducir(() => cmd.ExecuteNonQuery());
+    });
+
+    // UPDATE que solo se aplica si nadie cambió la fila desde que se leyó (Revision = xmin de PostgreSQL).
+    // Con revisión 0 (registro que no se leyó de la base) se actualiza sin controlar.
+    protected void Actualizar(string sqlUpdate, uint revision, params NpgsqlParameter[] parametros)
+    {
+        if (revision == 0) { Ejecutar(sqlUpdate, parametros); return; }
+        int filas = Ejecutar(sqlUpdate + " AND xmin = @Revision",
+            [.. parametros, new NpgsqlParameter("@Revision", NpgsqlTypes.NpgsqlDbType.Xid) { Value = revision }]);
+        if (filas == 0) throw new CambioAjenoException();
     }
 
     // da de alta y devuelve el Id nuevo (el SQL tiene que terminar en el INSERT).

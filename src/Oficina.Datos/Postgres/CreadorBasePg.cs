@@ -98,6 +98,14 @@ public static class CreadorBasePg
 
     private static bool EsFuncion(string lote) => lote.Contains("CREATE OR REPLACE FUNCTION");
 
+    // el usuario puede cambiar tablas si es el dueño de la base de datos o superusuario (el de todos los días no lo es)
+    private static bool PuedeCambiarEstructura(NpgsqlConnection cn)
+    {
+        using var c = new NpgsqlCommand(
+            "SELECT rolsuper OR pg_has_role(current_user, (SELECT tableowner FROM pg_tables WHERE tablename = 'acta' LIMIT 1), 'USAGE') FROM pg_roles WHERE rolname = current_user", cn);
+        return c.ExecuteScalar() is true;
+    }
+
     // Migraciones: sql/Migraciones/NNN_nombre.sql (se aplican en orden de nombre, cada una una sola vez).
     // El servidor anota las aplicadas en la tabla EsquemaMigracion. Cada migración corre en una transacción:
     // si falla, no queda nada a medias. Las separa el mismo "GO" que el script principal.
@@ -113,17 +121,27 @@ public static class CreadorBasePg
         using (var c = new NpgsqlCommand($"SELECT pg_advisory_lock({candado})", cn)) c.ExecuteNonQuery();
         try
         {
-            using (var c = new NpgsqlCommand(
-                "CREATE TABLE IF NOT EXISTS EsquemaMigracion (Nombre VARCHAR(150) PRIMARY KEY, Aplicada TIMESTAMP(0) NOT NULL DEFAULT LOCALTIMESTAMP(0))", cn))
-                c.ExecuteNonQuery();
+            // la tabla se crea solo si falta: el usuario de todos los días (sin permiso para crear tablas) no puede ni intentarlo
+            using (var existe = new NpgsqlCommand("SELECT to_regclass('public.esquemamigracion') IS NOT NULL", cn))
+                if (!(bool)existe.ExecuteScalar())
+                    using (var c = new NpgsqlCommand(
+                        "CREATE TABLE EsquemaMigracion (Nombre VARCHAR(150) PRIMARY KEY, Aplicada TIMESTAMP(0) NOT NULL DEFAULT LOCALTIMESTAMP(0))", cn))
+                        c.ExecuteNonQuery();
 
             var hechas = new HashSet<string>();
             using (var c = new NpgsqlCommand("SELECT Nombre FROM EsquemaMigracion", cn))
             using (var r = c.ExecuteReader())
                 while (r.Read()) hechas.Add(r.GetString(0));
 
+            var pendientes = migraciones.Where(m => !hechas.Contains(m)).ToList();
+            if (pendientes.Count > 0 && !PuedeCambiarEstructura(cn))
+                throw new InvalidOperationException(
+                    $"Hay {pendientes.Count} cambio(s) de estructura de la base pendiente(s) ({string.Join(", ", pendientes.Select(p => p.Replace("MigracionesPg.", "")))}) " +
+                    $"y el usuario «{cn.UserName}» no tiene permiso para aplicarlos. Abrí la aplicación una vez con el usuario administrador de la base " +
+                    "(en conexion.local.txt) y después volvé al usuario de todos los días.");
+
             int aplicadas = 0;
-            foreach (var recurso in migraciones.Where(m => !hechas.Contains(m)))
+            foreach (var recurso in pendientes)
             {
                 using var tx = cn.BeginTransaction();
                 try

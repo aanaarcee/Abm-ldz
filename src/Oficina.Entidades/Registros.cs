@@ -37,6 +37,10 @@ public abstract class RegistroAuditado
     public int? IdUsuarioModif { get; set; }
     public DateTime? FechaModif { get; set; }
 
+    // marca de la base que cambia cada vez que se guarda la fila (xmin en PostgreSQL). Sirve para saber si otra
+    // persona lo modificó desde que se abrió: al guardar con una revisión vieja, la base no lo acepta. 0 = no controlar.
+    public uint Revision { get; set; }
+
     public DateTime UltimaModificacion => FechaModif ?? FechaAlta;
 }
 

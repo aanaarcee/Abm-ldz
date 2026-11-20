@@ -31,7 +31,27 @@ public class DatosEnMemoria : IDatosSeguridad, IDatosRegistros
     {
         int i = lista.FindIndex(x => esEste(x));
         if (i < 0) throw new InvalidOperationException("No se encontró el registro a modificar.");
+        // igual que xmin en PostgreSQL: si alguien lo guardó desde que se leyó, no se acepta
+        if (nuevo is RegistroAuditado n && lista[i] is RegistroAuditado viejo)
+        {
+            if (n.Revision != 0 && n.Revision != viejo.Revision) throw new CambioAjenoException();
+            n.Revision = viejo.Revision + 1;
+        }
         lista[i] = nuevo;
+    }
+
+    // alta: la copia guardada arranca en la revisión 1
+    private static void Alta<T>(List<T> lista, T nuevo) where T : RegistroAuditado
+    {
+        var c = Copia(nuevo);
+        c.Revision = 1;
+        lista.Add(c);
+    }
+
+    // En memoria no hay forma de deshacer: solo se asegura que nadie más escriba en el medio
+    public void EnTransaccion(Action accion)
+    {
+        lock (_candado) accion();
     }
 
     // seguridad
@@ -190,7 +210,7 @@ public class DatosEnMemoria : IDatosSeguridad, IDatosRegistros
             if (acta.IdActa == 0)
             {
                 acta.IdActa = SiguienteId(_actas, a => a.IdActa);
-                _actas.Add(Copia(acta));
+                Alta(_actas, acta);
             }
             else Reemplazar(_actas, a => a.IdActa == acta.IdActa, Copia(acta));
         }
@@ -255,7 +275,7 @@ public class DatosEnMemoria : IDatosSeguridad, IDatosRegistros
             if (movimiento.IdMovimiento == 0)
             {
                 movimiento.IdMovimiento = SiguienteId(_movimientos, m => m.IdMovimiento);
-                _movimientos.Add(Copia(movimiento));
+                Alta(_movimientos, movimiento);
             }
             else Reemplazar(_movimientos, m => m.IdMovimiento == movimiento.IdMovimiento, Copia(movimiento));
         }
@@ -286,7 +306,7 @@ public class DatosEnMemoria : IDatosSeguridad, IDatosRegistros
             if (reclamo.IdReclamo == 0)
             {
                 reclamo.IdReclamo = SiguienteId(_reclamos, r => r.IdReclamo);
-                _reclamos.Add(Copia(reclamo));
+                Alta(_reclamos, reclamo);
             }
             else Reemplazar(_reclamos, r => r.IdReclamo == reclamo.IdReclamo, Copia(reclamo));
         }
@@ -314,7 +334,7 @@ public class DatosEnMemoria : IDatosSeguridad, IDatosRegistros
             if (lote.IdLote == 0)
             {
                 lote.IdLote = SiguienteId(_lotes, l => l.IdLote);
-                _lotes.Add(Copia(lote));
+                Alta(_lotes, lote);
             }
             else Reemplazar(_lotes, l => l.IdLote == lote.IdLote, Copia(lote));
         }

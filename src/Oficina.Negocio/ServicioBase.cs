@@ -22,11 +22,22 @@ public abstract class ServicioBase
             IdUsuario = Sesion.IdUsuario, Fecha = DateTime.Now
         });
 
-    /// ejecuta una escritura y convierte los errores de clave repetida en ExcepcionNegocio 
+    /// ejecuta una escritura y convierte los errores de clave repetida en ExcepcionNegocio
     protected static void Guardar(Action escritura)
     {
         try { escritura(); }
         catch (InvalidOperationException ex) { throw new ExcepcionNegocio(ex.Message, ex); }
+    }
+
+    /// Una operación completa (los datos y su historial) en una sola transacción: si algo falla en el medio
+    /// (un error, un corte de conexión), no queda nada a medias. También traduce los errores como Guardar.
+    protected void Operacion(Action escrituras) => Guardar(() => Datos.EnTransaccion(escrituras));
+
+    /// Si el registro cambió desde que el usuario lo abrió (otra persona lo guardó), no se pisa su cambio
+    protected static void ExigirSinCambiosAjenos(RegistroAuditado abierto, RegistroAuditado actual)
+    {
+        if (abierto.Revision != 0 && abierto.Revision != actual.Revision)
+            throw new ExcepcionNegocio(new CambioAjenoException().Message);
     }
 
     protected static string Limpio(string s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
