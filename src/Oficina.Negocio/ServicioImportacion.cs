@@ -236,10 +236,11 @@ public class ServicioImportacion : ServicioBase
             else fila.Aviso = "Otro movimiento de un acta nueva del archivo";
 
             // el documento identifica a la persona: si ya está cargada con otro nombre, una planilla no la renombra
-            if (persona?.NroDocumento is { } doc && Datos.BuscarPersonaPorDocumento(persona.TipoDocumento, doc) is { } yaCargada
-                && (!TextoBusqueda.Iguales(yaCargada.Apellido, persona.Apellido?.Trim()) || !TextoBusqueda.Iguales(yaCargada.Nombre ?? "", persona.Nombre?.Trim() ?? "")))
+            // (siempre se usa el nombre ya cargado, aunque solo cambien mayúsculas o acentos; el aviso, si es otro nombre)
+            if (persona?.NroDocumento is { } doc && Datos.BuscarPersonaPorDocumento(persona.TipoDocumento, doc) is { } yaCargada)
             {
-                fila.Aviso += $" · El {yaCargada.TipoDocumento} {doc} ya está cargado como «{yaCargada.NombreCompleto}»: se usa ese nombre";
+                if (!TextoBusqueda.Iguales(yaCargada.Apellido, persona.Apellido?.Trim()) || !TextoBusqueda.Iguales(yaCargada.Nombre ?? "", persona.Nombre?.Trim() ?? ""))
+                    fila.Aviso += $" · El {yaCargada.TipoDocumento} {doc} ya está cargado como «{yaCargada.NombreCompleto}»: se usa ese nombre";
                 persona.Apellido = yaCargada.Apellido;
                 persona.Nombre = yaCargada.Nombre;
             }

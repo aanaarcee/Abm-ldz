@@ -44,7 +44,7 @@ internal class FormPrincipal : Form, INavegador
         WindowState = FormWindowState.Maximized;
 
         // ---------- Barra de arriba con el buscador general ----------
-        _buscador = Estilo.Buscador("Buscar en todo: N° de causa, acta, persona, DNI, remito, caso, lote…", 560);
+        _buscador = Estilo.Buscador("Buscar en todo: N° de causa, acta, apremio, persona, DNI, remito, caso, lote…", 560);
         _buscador.Anchor = AnchorStyles.Left;
         _buscador.TextChanged += (_, _) => { _espera.Stop(); if (!_silenciar) _espera.Start(); };
         _buscador.KeyDown += (_, e) =>
