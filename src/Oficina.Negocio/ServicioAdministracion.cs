@@ -100,16 +100,53 @@ public class ServicioAdministracion : ServicioBase
 
     public void CrearUsuario(string nombreUsuario, string clave, int idRol)
     {
-        Requerido(nombreUsuario, "el nombre de la cuenta");
-        nombreUsuario = nombreUsuario.Trim().ToLowerInvariant();
-        Largo(nombreUsuario, 30, "El nombre de la cuenta");
-        if (nombreUsuario.Any(char.IsWhiteSpace)) throw new ExcepcionNegocio("El nombre de la cuenta no puede tener espacios.");
-        Contrasenas.Validar(clave);
+        nombreUsuario = ValidarNuevaCuenta(nombreUsuario, clave);
         if (_seguridad.ObtenerRol(idRol) == null) throw new ExcepcionNegocio("Falta elegir el rol.");
         var (hash, sal) = Contrasenas.Generar(clave);
         var u = new Usuario { NombreUsuario = nombreUsuario, ClaveHash = hash, ClaveSal = sal, IdRol = idRol, Activo = true };
         Guardar(() => _seguridad.GuardarUsuario(u));
         Registrar("Usuario", u.IdUsuario, null, "Alta", nombreUsuario);
+    }
+
+    // devuelve el nombre de cuenta limpio (sin espacios, en minúscula) o avisa qué está mal
+    private string ValidarNuevaCuenta(string nombreUsuario, string clave)
+    {
+        Requerido(nombreUsuario, "el nombre de la cuenta");
+        nombreUsuario = nombreUsuario.Trim().ToLowerInvariant();
+        Largo(nombreUsuario, 30, "El nombre de la cuenta");
+        if (nombreUsuario.Any(char.IsWhiteSpace)) throw new ExcepcionNegocio("El nombre de la cuenta no puede tener espacios.");
+        if (_seguridad.ObtenerUsuario(nombreUsuario) != null) throw new ExcepcionNegocio("Ya existe una cuenta con ese nombre.");
+        Contrasenas.Validar(clave);
+        return nombreUsuario;
+    }
+
+    /// Cuenta de una persona que no pertenece a un sector (por ejemplo, un juez de la oficina).
+    /// Tiene su propio rol, sin sector, con el nombre del cargo; el Administrador le marca después los permisos de ese rol.
+    /// Devuelve el Id del rol creado, para abrir sus permisos.
+    public int CrearCuentaPersonal(string nombreUsuario, string clave, string cargo)
+    {
+        nombreUsuario = ValidarNuevaCuenta(nombreUsuario, clave);
+        Requerido(cargo, "el cargo o el nombre de la persona");
+        cargo = cargo.Trim();
+        Largo(cargo, 60, "El cargo");
+        if (_seguridad.ListarRoles().Any(r => TextoBusqueda.Iguales(r.Nombre, cargo)))
+            throw new ExcepcionNegocio($"Ya existe un rol llamado «{cargo}». Use otro nombre (por ejemplo, agregue el apellido).");
+
+        var rol = new Rol { Nombre = cargo, IdSectorPropio = null, EsAdministrador = false };
+        Guardar(() => _seguridad.GuardarRol(rol));
+        Registrar("Rol", rol.IdRol, null, "Alta", $"{rol.Nombre} · cuenta personal");
+        var (hash, sal) = Contrasenas.Generar(clave);
+        var u = new Usuario { NombreUsuario = nombreUsuario, ClaveHash = hash, ClaveSal = sal, IdRol = rol.IdRol, Activo = true };
+        Guardar(() => _seguridad.GuardarUsuario(u));
+        Registrar("Usuario", u.IdUsuario, null, "Alta", $"{nombreUsuario} · cuenta personal ({cargo}), todavía sin permisos");
+        return rol.IdRol;
+    }
+
+    /// Dar de baja (no puede entrar) o reactivar una cuenta. No se borra: su nombre sigue en el historial de lo que hizo.
+    public void CambiarEstado(int idUsuario, bool activa)
+    {
+        var u = ObtenerUsuario(idUsuario);
+        CambiarRolYEstado(idUsuario, u.IdRol, activa);
     }
 
     public void CambiarClave(int idUsuario, string clave)

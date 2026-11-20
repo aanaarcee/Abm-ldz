@@ -33,11 +33,12 @@ internal class FormLogin : Form
 
         var tabla = new TableLayoutPanel { AutoSize = true, ColumnCount = 1, Dock = DockStyle.Fill };
         tabla.Controls.Add(Estilo.Etiqueta("Registros de Oficina", Estilo.Titulo));
-        tabla.Controls.Add(Estilo.Etiqueta("Entre con la cuenta de su sector.", color: Estilo.TextoSuave));
+        tabla.Controls.Add(Estilo.Etiqueta("Entre con la cuenta de su sector o con su cuenta personal.", color: Estilo.TextoSuave));
         tabla.Controls.Add(Estilo.Etiqueta("Usuario"));
         tabla.Controls.Add(_usuario);
         tabla.Controls.Add(Estilo.Etiqueta("Contraseña"));
         tabla.Controls.Add(_clave);
+        tabla.Controls.Add(Estilo.MostrarClave(_clave));
         tabla.Controls.Add(_error);
         tabla.Controls.Add(entrar);
         tabla.Controls.Add(Estilo.Etiqueta($"Datos en {app.Origen}", new Font("Segoe UI", 8.25f), Estilo.TextoSuave));

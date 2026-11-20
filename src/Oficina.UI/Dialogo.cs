@@ -41,6 +41,7 @@ internal static class Dialogo
         var tabla = new TableLayoutPanel { AutoSize = true, ColumnCount = 1, Dock = DockStyle.Fill };
         tabla.Controls.Add(Estilo.Etiqueta(pregunta));
         tabla.Controls.Add(caja);
+        if (clave) tabla.Controls.Add(Estilo.MostrarClave(caja));
         tabla.Controls.Add(botones);
         f.Controls.Add(tabla);
         f.AcceptButton = aceptar;

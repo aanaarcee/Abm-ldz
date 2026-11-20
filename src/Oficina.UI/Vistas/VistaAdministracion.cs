@@ -21,13 +21,14 @@ internal class VistaAdministracion : UserControl
     private readonly DataGridView _cuentas, _sectores;
     private readonly ListBox _reparticiones, _juzgados;
     private readonly ListView _historial;
+    private readonly TabControl _pestañas;
 
     public VistaAdministracion(INavegador nav)
     {
         _admin = nav.App.Administracion(nav.Sesion);
         BackColor = Estilo.Fondo;
 
-        var pestañas = new TabControl { Dock = DockStyle.Fill, Padding = new Point(Estilo.Px(12), Estilo.Px(5)) };
+        var pestañas = _pestañas = new TabControl { Dock = DockStyle.Fill, Padding = new Point(Estilo.Px(12), Estilo.Px(5)) };
 
         // roles y permisos
         _roles = new ListBox { Dock = DockStyle.Fill, Font = Estilo.Letra, IntegralHeight = false, BorderStyle = BorderStyle.FixedSingle };
@@ -63,13 +64,25 @@ internal class VistaAdministracion : UserControl
 
         // cuentas
         _cuentas = Estilo.Grilla();
-        _cuentas.Columna("NombreUsuario", "Cuenta", 180);
+        _cuentas.Columna("NombreUsuario", "Cuenta", 160);
+        _cuentas.Columna("Tipo", "Tipo", 110);
         _cuentas.Columna("Rol", "Rol", 220);
         _cuentas.Columna("Estado", "Estado");
+        _cuentas.CellFormatting += (_, e) =>
+        {
+            if (e.RowIndex >= 0 && _cuentas.Columns[e.ColumnIndex].Name == "Estado" && _cuentas.Rows[e.RowIndex].DataBoundItem is FilaCuenta { Activo: false })
+                e.CellStyle.ForeColor = Estilo.Peligro;
+        };
         var cuentas = Columna(
-            Estilo.Etiqueta("Una cuenta general por sector. Las contraseñas se guardan cifradas (PBKDF2): no se pueden ver, solo cambiar.", color: Estilo.TextoSuave),
-            Fila(Estilo.Boton("Nueva cuenta", (_, _) => NuevaCuenta(), principal: true), Estilo.Boton("Cambiar contraseña", (_, _) => CambiarClave()),
-                 Estilo.Boton("Cambiar rol o estado", (_, _) => CambiarRol())));
+            Estilo.Etiqueta("Cuentas de sector (una general por sector) y cuentas personales (una persona sin sector, por ejemplo un juez, con sus propios permisos).\n" +
+                            "Las contraseñas se guardan cifradas (PBKDF2): no se pueden ver, solo cambiar. Una cuenta dada de baja no puede entrar, pero no se borra: " +
+                            "su nombre sigue en el historial.", color: Estilo.TextoSuave),
+            Fila(Estilo.Boton("Nueva cuenta de sector", (_, _) => NuevaCuenta(), principal: true),
+                 Estilo.Boton("Nueva cuenta personal", (_, _) => NuevaCuentaPersonal(), principal: true),
+                 Estilo.Boton("Cambiar contraseña", (_, _) => CambiarClave()),
+                 Estilo.Boton("Permisos", (_, _) => VerPermisos()),
+                 Estilo.Boton("Cambiar rol", (_, _) => CambiarRol()),
+                 Estilo.Boton("Dar de baja / reactivar", (_, _) => DarDeBaja())));
         cuentas.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         cuentas.Controls.Add(Marco(_cuentas));
         Pestaña(pestañas, "Cuentas", cuentas);
@@ -251,11 +264,16 @@ internal class VistaAdministracion : UserControl
 
     private void CargarCuentas()
     {
-        var roles = _admin.Roles().ToDictionary(r => r.IdRol, r => r.Nombre);
-        _cuentas.DataSource = _admin.Usuarios().Select(u => new FilaCuenta
+        var roles = _admin.Roles().ToDictionary(r => r.IdRol);
+        _cuentas.DataSource = _admin.Usuarios().Select(u =>
         {
-            IdUsuario = u.IdUsuario, IdRol = u.IdRol, Activo = u.Activo, NombreUsuario = u.NombreUsuario,
-            Rol = roles.GetValueOrDefault(u.IdRol), Estado = u.Activo ? "Activa" : "Desactivada"
+            var rol = roles.GetValueOrDefault(u.IdRol);
+            return new FilaCuenta
+            {
+                IdUsuario = u.IdUsuario, IdRol = u.IdRol, Activo = u.Activo, NombreUsuario = u.NombreUsuario, Rol = rol?.Nombre,
+                Tipo = rol == null ? "" : rol.EsAdministrador ? "Administrador" : rol.IdSectorPropio == null ? "Personal" : "Sector",
+                Estado = u.Activo ? "Activa" : "Dada de baja"
+            };
         }).ToList();
     }
 
@@ -265,8 +283,16 @@ internal class VistaAdministracion : UserControl
         public int IdRol { get; set; }
         public bool Activo { get; set; }
         public string NombreUsuario { get; set; }
+        public string Tipo { get; set; }
         public string Rol { get; set; }
         public string Estado { get; set; }
+    }
+
+    private FilaCuenta CuentaElegida()
+    {
+        if (_cuentas.CurrentRow?.DataBoundItem is FilaCuenta c) return c;
+        Dialogo.Aviso("Primero elija una cuenta de la lista.");
+        return null;
     }
 
     private void NuevaCuenta()
@@ -275,16 +301,52 @@ internal class VistaAdministracion : UserControl
         if (f.ShowDialog(this) == DialogResult.OK) CargarCuentas();
     }
 
+    // cuenta de una persona sin sector: se crea con su propio rol y se pasa directo a marcarle los permisos
+    private void NuevaCuentaPersonal()
+    {
+        using var f = new FormCuentaPersonal(_admin);
+        if (f.ShowDialog(this) != DialogResult.OK) return;
+        CargarCuentas();
+        AbrirPermisos(f.IdRolCreado);
+        Dialogo.Aviso($"Se creó la cuenta «{f.Cuenta}». Todavía no tiene permisos: marque qué puede hacer en cada sector y toque «Guardar permisos».");
+    }
+
+    // los permisos son del rol de la cuenta: se abre esa pestaña con el rol elegido
+    private void VerPermisos()
+    {
+        if (CuentaElegida() is not { } c) return;
+        AbrirPermisos(c.IdRol);
+        if (c.Tipo == "Sector")
+            Dialogo.Aviso($"Estos permisos son del rol «{c.Rol}»: valen para todas las cuentas de ese rol, no solo para «{c.NombreUsuario}».");
+    }
+
+    private void AbrirPermisos(int idRol)
+    {
+        _pestañas.SelectedIndex = 0;
+        CargarRoles(idRol);
+    }
+
+    private void DarDeBaja()
+    {
+        if (CuentaElegida() is not { } c) return;
+        string pregunta = c.Activo
+            ? $"¿Dar de baja la cuenta «{c.NombreUsuario}»? No va a poder entrar. No se borra: lo que hizo sigue en el historial y se puede reactivar."
+            : $"¿Reactivar la cuenta «{c.NombreUsuario}»? Va a poder entrar otra vez con su contraseña.";
+        if (!Dialogo.Confirmar(pregunta)) return;
+        _admin.CambiarEstado(c.IdUsuario, !c.Activo);
+        CargarCuentas();
+    }
+
     private void CambiarRol()
     {
-        if (_cuentas.CurrentRow?.DataBoundItem is not FilaCuenta c) return;
+        if (CuentaElegida() is not { } c) return;
         using var f = new FormCuenta(_admin, new Usuario { IdUsuario = c.IdUsuario, NombreUsuario = c.NombreUsuario, IdRol = c.IdRol, Activo = c.Activo });
         if (f.ShowDialog(this) == DialogResult.OK) CargarCuentas();
     }
 
     private void CambiarClave()
     {
-        if (_cuentas.CurrentRow?.DataBoundItem is not FilaCuenta c) return;
+        if (CuentaElegida() is not { } c) return;
         var clave = Dialogo.PedirTexto(this, "Cambiar contraseña", $"Nueva contraseña para «{c.NombreUsuario}» (al menos 6 caracteres):", clave: true);
         if (clave == null) return;
         _admin.CambiarClave(c.IdUsuario, clave);
@@ -351,6 +413,7 @@ internal class FormCuenta : FormularioDatos
         {
             _nombre = Campo("Usuario", Texto(30));
             _clave = Campo("Contraseña", new TextBox { UseSystemPasswordChar = true });
+            Campo("", Estilo.MostrarClave(_clave));
             Nota("Al menos 6 caracteres. Se guarda cifrada.");
         }
         _rol = Campo("Rol", Lista(admin.Roles()));
@@ -366,6 +429,37 @@ internal class FormCuenta : FormularioDatos
         int idRol = (_rol.SelectedItem as Rol)?.IdRol ?? 0;
         if (_existente == null) _admin.CrearUsuario(_nombre.Text, _clave.Text, idRol);
         else _admin.CambiarRolYEstado(_existente.IdUsuario, idRol, _activa.Checked);
+        return true;
+    }
+}
+
+// cuenta personal: una persona sin sector (por ejemplo, un juez) con su propio rol y sus propios permisos
+internal class FormCuentaPersonal : FormularioDatos
+{
+    private readonly ServicioAdministracion _admin;
+    private readonly TextBox _nombre, _clave, _cargo;
+
+    public int IdRolCreado { get; private set; }
+    public string Cuenta { get; private set; }
+
+    public FormCuentaPersonal(ServicioAdministracion admin) : base("Nueva cuenta personal")
+    {
+        _admin = admin;
+        Seccion("Cuenta personal (sin sector)");
+        Nota("Para una persona que no trabaja en un sector, por ejemplo un juez de la oficina. " +
+             "Tiene sus propios permisos, que se marcan en el paso siguiente.");
+        _cargo = Campo("Cargo o nombre", Texto(60));
+        Nota("Es el nombre de su rol. Por ejemplo: Juez de Faltas N° 2, o Juez Pérez.");
+        _nombre = Campo("Usuario", Texto(30));
+        _clave = Campo("Contraseña", new TextBox { UseSystemPasswordChar = true });
+        Campo("", Estilo.MostrarClave(_clave));
+        Nota("Al menos 6 caracteres. Se guarda cifrada.");
+    }
+
+    protected override bool Guardar()
+    {
+        IdRolCreado = _admin.CrearCuentaPersonal(_nombre.Text, _clave.Text, _cargo.Text);
+        Cuenta = _nombre.Text.Trim().ToLowerInvariant();
         return true;
     }
 }

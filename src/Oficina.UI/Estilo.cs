@@ -99,6 +99,14 @@ internal static class Estilo
         Text = texto, AutoSize = true, Font = letra ?? Letra, ForeColor = color ?? Texto, Margin = new Padding(0, Px(4), Px(6), Px(4))
     };
 
+    // casilla "Mostrar contraseña" que destapa o vuelve a tapar la caja de la contraseña
+    public static CheckBox MostrarClave(TextBox caja)
+    {
+        var c = new CheckBox { Text = "Mostrar contraseña", AutoSize = true, Font = Letra, ForeColor = TextoSuave, Margin = new Padding(0, 0, 0, Px(6)) };
+        c.CheckedChanged += (_, _) => caja.UseSystemPasswordChar = !c.Checked;
+        return c;
+    }
+
     ///  cajas grises que ayudan al diseño de los txtbox
     public static TextBox Buscador(string ayuda, int ancho) => new()
     {
